@@ -3,6 +3,8 @@
 // @namespace    https://github.com/LinMingjing007/boss-auto
 // @homepageURL  https://github.com/LinMingjing007/boss-auto
 // @source       https://atomgit.com/gcw_r7Og3ygT/boss-auto
+// @downloadURL  https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/boss-auto.user.js
+// @updateURL    https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/boss-auto.user.js
 // @version      0.6.6
 // @description  Boss 直聘职位筛选、在线状态判断及多轮聊天辅助
 // @author       you
