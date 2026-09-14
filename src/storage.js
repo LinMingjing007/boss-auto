@@ -140,6 +140,11 @@
     return value.split('-').map((item) => item.trim()).filter(Boolean);
   }
 
+  function randomDelay(min, max) {
+    const delay = Math.floor(Math.random() * (max - min + 1)) + min;
+    return new Promise((resolve) => window.setTimeout(resolve, delay));
+  }
+
   window.BossAutoStorage = Object.freeze({
     loadConfig,
     saveConfig,
@@ -148,5 +153,6 @@
     hasMessageRecord,
     saveMessageRecord,
     splitTerms,
+    randomDelay,
   });
 })();

@@ -50,7 +50,7 @@
   });
   const {
     getConfig, addSettingsButton, openSettingsView,
-    updateOnlineStatusCapability, createSettingsView, createSettingsPanel,
+    updateOnlineStatusCapability, createSettingsPanel,
   } = settings;
   const chat = window.BossAutoChat({
     CHAT_PANEL_ID, MESSAGE_INTERVAL_MS,
@@ -60,12 +60,14 @@
     hasMessageRecord: window.BossAutoStorage.hasMessageRecord,
     saveMessageRecord: window.BossAutoStorage.saveMessageRecord,
     setStatus, escapeHtml, addSettingsButton, openSettingsView, isChatPage,
+    randomDelay: window.BossAutoStorage.randomDelay,
   });
-  const { createChatPanel, startChatMonitor, stopChatMonitor } = chat;
+  const { createChatPanel, stopChatMonitor } = chat;
   const jobs = window.BossAutoJobs({
     setStatus, getConfig, loadConfig: window.BossAutoStorage.loadConfig,
-    isJobAllowed, splitTerms: window.BossAutoStorage.splitTerms,
-    createStatusPanel, isJobsPage, PANEL_ID, MESSAGE_INTERVAL_MS,
+    isJobAllowed, isJobsPage, STATUS_OPTIONS,
+    randomDelay: window.BossAutoStorage.randomDelay,
+    updateOnlineStatusCapability,
   });
   Object.assign(jobBridge, jobs);
 

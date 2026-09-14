@@ -3,8 +3,8 @@
 
   window.BossAutoJobs = function createJobsModule(context) {
     const {
-      setStatus, getConfig, loadConfig, isJobAllowed, splitTerms,
-      createStatusPanel, isJobsPage, PANEL_ID, MESSAGE_INTERVAL_MS,
+      setStatus, getConfig, loadConfig, isJobAllowed, STATUS_OPTIONS, randomDelay,
+      isJobsPage, updateOnlineStatusCapability,
     } = context;
     let paginationRunning = false;
     let deliveryRunning = false;
@@ -67,11 +67,6 @@
         };
         check();
       });
-    }
-  
-    function randomDelay(min, max) {
-      const delay = Math.floor(Math.random() * (max - min + 1)) + min;
-      return new Promise((resolve) => window.setTimeout(resolve, delay));
     }
   
     async function waitForDeliveryResume() {

@@ -4,9 +4,8 @@
   window.BossAutoChat = function createChatModule(context) {
     const {
       CHAT_PANEL_ID, MESSAGE_INTERVAL_MS,
-      loadConfig, handleImageFileSelection, getMessageRecordKey,
-      hasMessageRecord, saveMessageRecord, setStatus, escapeHtml,
-      addSettingsButton, openSettingsView, isChatPage,
+      loadConfig, getMessageRecordKey, hasMessageRecord, saveMessageRecord,
+      setStatus, addSettingsButton, isChatPage, randomDelay,
     } = context;
     let chatMonitorTimer = null;
     let chatMonitorObserver = null;
