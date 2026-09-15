@@ -3,10 +3,11 @@
 
   window.BossAutoConstants = Object.freeze({
     TARGET_PATH: '/web/geek/jobs',
-    SCRIPT_VERSION: '0.14.0',
+    SCRIPT_VERSION: '0.15.0',
     CONFIG_KEY: 'boss-auto-config',
     MESSAGE_RECORDS_KEY: 'boss-auto-message-records',
     CHAT_PANEL_ID: 'boss-auto-chat-panel',
+    AI_CHAT_PANEL_ID: 'boss-auto-ai-chat-panel',
     LOG_PANEL_ID: 'boss-auto-log-panel',
     PANEL_ID: 'boss-auto-panel',
     STATUS_ID: 'boss-auto-status',
