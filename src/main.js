@@ -71,6 +71,8 @@
   const chat = window.BossAutoChat({
     CHAT_PANEL_ID, MESSAGE_INTERVAL_MS,
     loadConfig: window.BossAutoStorage.loadConfig,
+    loadConfigStore: window.BossAutoStorage.loadConfigStore,
+    setActiveVersion: window.BossAutoStorage.setActiveVersion,
     handleImageFileSelection: window.BossAutoStorage.handleImageFileSelection,
     getMessageRecordKey: window.BossAutoStorage.getMessageRecordKey,
     hasMessageRecord: window.BossAutoStorage.hasMessageRecord,

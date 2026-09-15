@@ -333,6 +333,17 @@
       const timer = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
       try {
         const isDeepSeek = /deepseek/i.test(`${config.aiEndpoint} ${config.aiModel}`);
+        const decisionSchema = {
+          type: 'object',
+          properties: {
+            pass: { type: 'boolean', description: '是否通过岗位匹配判断' },
+            score: { type: 'number', minimum: 0, maximum: 100, description: '岗位匹配分数' },
+            reason: { type: 'string', description: '判断理由' },
+            risks: { type: 'string', description: '风险或不匹配点，没有则为空字符串' },
+          },
+          required: ['pass', 'score', 'reason', 'risks'],
+          additionalProperties: false,
+        };
         const response = await fetch(config.aiEndpoint, {
           method: 'POST',
           headers: {
@@ -342,10 +353,20 @@
           body: JSON.stringify({
             model: config.aiModel,
             temperature: 0,
+            max_tokens: 256,
             ...(isDeepSeek ? {
               thinking: { type: 'disabled' },
-              response_format: { type: 'json_object' },
-            } : {}),
+              tools: [{
+                type: 'function',
+                function: {
+                  name: 'job_match_decision',
+                  description: '输出岗位匹配判断结果',
+                  strict: true,
+                  parameters: decisionSchema,
+                },
+              }],
+              tool_choice: { type: 'function', function: { name: 'job_match_decision' } },
+            } : { response_format: { type: 'json_object' } }),
             messages: [
               { role: 'system', content: `${config.aiPrompt}\n\n请严格只返回 JSON，格式为：{"pass":true或false,"score":0到100,"reason":"简短理由","risks":"风险，没有则为空"}。` },
               { role: 'user', content: `请判断以下职位信息：\n${JSON.stringify(knownInfo, null, 2)}` },
@@ -355,7 +376,8 @@
         });
         if (!response.ok) throw new Error(`AI 接口 HTTP ${response.status}`);
         const data = await response.json();
-        const content = data?.choices?.[0]?.message?.content;
+        const message = data?.choices?.[0]?.message;
+        const content = message?.tool_calls?.[0]?.function?.arguments || message?.content;
         if (!content) throw new Error('AI 接口未返回判断内容');
         return parseAiDecision(content);
       } catch (error) {
