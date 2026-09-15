@@ -2,15 +2,12 @@
   'use strict';
 
   window.BossAutoLog = function createLogModule(context) {
-    const { LOG_PANEL_ID, escapeHtml } = context;
+    const { LOG_PANEL_ID, PANEL_ID, CHAT_PANEL_ID, escapeHtml } = context;
     const entries = [];
     const MAX_ENTRIES = 300;
     let panel = null;
     let list = null;
     let count = null;
-    let targetId = '';
-    let positionTimer = null;
-    let resizeObserver = null;
 
     function render() {
       if (!list) return;
@@ -34,26 +31,12 @@
       console.info('[Boss Auto][log]', text);
     }
 
-    function syncPosition() {
-      if (!panel || !targetId) return;
-      const target = document.getElementById(targetId);
-      if (!target) return;
-      const rect = target.getBoundingClientRect();
-      const gap = 16;
-      const panelWidth = panel.offsetWidth || 320;
-      const preferredLeft = rect.right + gap;
-      const fallbackLeft = rect.left - panelWidth - gap;
-      const left = preferredLeft + panelWidth <= window.innerWidth - 12
-        ? preferredLeft : Math.max(12, fallbackLeft);
-      const maxTop = Math.max(12, window.innerHeight - panel.offsetHeight - 12);
-      panel.style.left = `${Math.round(left)}px`;
-      panel.style.top = `${Math.round(Math.min(Math.max(12, rect.top), maxTop))}px`;
-      panel.style.right = 'auto';
-      panel.style.bottom = 'auto';
-    }
-
     function createLogPanel(page = 'jobs') {
-      if (panel) return;
+      if (panel?.isConnected) return;
+      if (panel && !panel.isConnected) {
+        panel = null;
+        document.getElementById(`${LOG_PANEL_ID}-style`)?.remove();
+      }
       const style = document.createElement('style');
       style.id = `${LOG_PANEL_ID}-style`;
       style.textContent = `
@@ -66,6 +49,15 @@
           font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
         #${LOG_PANEL_ID}.chat-position { top: 84px; left: 396px; }
+        #${PANEL_ID}.boss-auto-unified-panel, #${CHAT_PANEL_ID}.boss-auto-unified-panel { display: grid; grid-template-columns: minmax(280px, 336px) minmax(280px, 320px); grid-template-rows: auto 1fr; width: 672px; max-width: calc(100vw - 24px); max-height: calc(100vh - 108px); overflow: hidden; }
+        #${PANEL_ID}.boss-auto-unified-panel > .boss-auto-panel-header, #${CHAT_PANEL_ID}.boss-auto-unified-panel > .chat-panel-header { grid-column: 1 / -1; }
+        #${PANEL_ID}.boss-auto-unified-panel > .boss-auto-panel-body { grid-column: 1; min-width: 0; overflow: auto; }
+        #${CHAT_PANEL_ID}.boss-auto-unified-panel > :not(.chat-panel-header):not(#${LOG_PANEL_ID}) { grid-column: 1; }
+        #${CHAT_PANEL_ID}.boss-auto-unified-panel > #${LOG_PANEL_ID} { grid-column: 2; grid-row: 2 / span 5; }
+        #${PANEL_ID}.boss-auto-unified-panel.collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.collapsed { display: block; width: 190px; min-width: 190px; }
+        #${PANEL_ID}.boss-auto-unified-panel.collapsed > #${LOG_PANEL_ID}, #${CHAT_PANEL_ID}.boss-auto-unified-panel.collapsed > #${LOG_PANEL_ID} { display: none; }
+        #${LOG_PANEL_ID}.integrated { position: relative; top: auto; right: auto; bottom: auto; left: auto; z-index: auto; width: auto; max-width: none; height: auto; min-height: 0; max-height: none; border: 0; border-left: 1px solid #e4efe9; border-radius: 0; box-shadow: none; }
+        #${LOG_PANEL_ID}.integrated .boss-auto-log-list { min-height: 180px; height: 100%; }
         #${LOG_PANEL_ID} .boss-auto-log-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 14px; color:#164d43; background:#eef8f3; border-bottom:1px solid #e4efe9; cursor:grab; user-select:none; }
         #${LOG_PANEL_ID} .boss-auto-log-title { font-size:14px; font-weight:700; }
         #${LOG_PANEL_ID} .boss-auto-log-count { display:inline-flex; min-width:20px; height:20px; align-items:center; justify-content:center; margin-left:5px; padding:0 5px; color:#187a64; background:#d9f1e5; border-radius:10px; font-size:10px; }
@@ -80,7 +72,7 @@
         #${LOG_PANEL_ID} .boss-auto-log-entry[data-type="error"] span { color:#c93636; }
         #${LOG_PANEL_ID}.collapsed { width:190px; height:auto; }
         #${LOG_PANEL_ID}.collapsed .boss-auto-log-list { display:none; }
-        @media (max-width: 900px) { #${LOG_PANEL_ID} { max-width:calc(100vw - 24px); } }
+        @media (max-width: 900px) { #${PANEL_ID}.boss-auto-unified-panel, #${CHAT_PANEL_ID}.boss-auto-unified-panel { display: block; width: min(100vw - 24px, 420px); max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto; } #${LOG_PANEL_ID}.integrated { border-top: 1px solid #e4efe9; border-left: 0; } #${LOG_PANEL_ID}.integrated .boss-auto-log-list { height: 260px; } }
       `;
       document.head.appendChild(style);
       panel = document.createElement('section');
@@ -107,40 +99,29 @@
         panel.querySelector('.boss-auto-log-collapse').setAttribute('aria-expanded', String(!collapsed));
       });
       render();
-      syncPosition();
     }
 
     function removeLogPanel() {
       panel?.remove();
       document.getElementById(`${LOG_PANEL_ID}-style`)?.remove();
-      if (positionTimer) window.clearInterval(positionTimer);
-      resizeObserver?.disconnect();
       panel = null;
       list = null;
       count = null;
-      targetId = '';
-      positionTimer = null;
-      resizeObserver = null;
     }
 
     function setPage(page) {
       if (!panel) return;
       panel.classList.toggle('chat-position', page === 'chat');
-      syncPosition();
     }
 
-    function setTarget(nextTargetId) {
-      targetId = nextTargetId || '';
+    function attachTo(targetId) {
       const target = document.getElementById(targetId);
-      if (!target) return;
-      syncPosition();
-      if (!positionTimer) positionTimer = window.setInterval(syncPosition, 250);
-      if (!resizeObserver && window.ResizeObserver) {
-        resizeObserver = new ResizeObserver(syncPosition);
-        resizeObserver.observe(target);
-      }
+      if (!target || !panel) return;
+      target.classList.add('boss-auto-unified-panel');
+      panel.classList.add('integrated');
+      target.appendChild(panel);
     }
 
-    return { add, createLogPanel, removeLogPanel, setPage, setTarget };
+    return { add, createLogPanel, removeLogPanel, setPage, attachTo };
   };
 })();

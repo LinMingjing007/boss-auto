@@ -42,9 +42,9 @@
   }
   window.BossAutoSetStatus = setStatus;
   window.BossAutoLogInstance = typeof window.BossAutoLog === 'function'
-    ? window.BossAutoLog({ LOG_PANEL_ID, escapeHtml })
+    ? window.BossAutoLog({ LOG_PANEL_ID, PANEL_ID, CHAT_PANEL_ID, escapeHtml })
     : {
-      add() {}, createLogPanel() {}, removeLogPanel() {}, setPage() {}, setTarget() {},
+      add() {}, createLogPanel() {}, removeLogPanel() {}, setPage() {}, attachTo() {},
     };
 
 
@@ -399,7 +399,7 @@
       createSettingsPanel();
       window.BossAutoLogInstance.createLogPanel('jobs');
       window.BossAutoLogInstance.setPage('jobs');
-      window.BossAutoLogInstance.setTarget(PANEL_ID);
+      window.BossAutoLogInstance.attachTo(PANEL_ID);
       setStatus('检测到职位列表页变化，准备触发…');
       runAutomation();
     } else if (isChatPage()) {
@@ -407,7 +407,7 @@
       createChatPanel();
       window.BossAutoLogInstance.createLogPanel('chat');
       window.BossAutoLogInstance.setPage('chat');
-      window.BossAutoLogInstance.setTarget(CHAT_PANEL_ID);
+      window.BossAutoLogInstance.attachTo(CHAT_PANEL_ID);
       setStatus('聊天页面已就绪，请点击“开始沟通”');
     }
   }
@@ -424,17 +424,18 @@
       return;
     }
     createStatusPanel();
+    window.BossAutoLogInstance?.removeLogPanel();
     if (isJobsPage()) {
       createSettingsPanel();
       window.BossAutoLogInstance.createLogPanel('jobs');
       window.BossAutoLogInstance.setPage('jobs');
-      window.BossAutoLogInstance.setTarget(PANEL_ID);
+      window.BossAutoLogInstance.attachTo(PANEL_ID);
       runAutomation();
     } else {
       createChatPanel();
       window.BossAutoLogInstance.createLogPanel('chat');
       window.BossAutoLogInstance.setPage('chat');
-      window.BossAutoLogInstance.setTarget(CHAT_PANEL_ID);
+      window.BossAutoLogInstance.attachTo(CHAT_PANEL_ID);
       setStatus('聊天页面已就绪，请点击“开始沟通”');
     }
   }
