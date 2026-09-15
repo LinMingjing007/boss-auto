@@ -8,6 +8,9 @@
     let panel = null;
     let list = null;
     let count = null;
+    let targetId = '';
+    let positionTimer = null;
+    let resizeObserver = null;
 
     function render() {
       if (!list) return;
@@ -31,20 +34,38 @@
       console.info('[Boss Auto][log]', text);
     }
 
+    function syncPosition() {
+      if (!panel || !targetId) return;
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      const gap = 16;
+      const panelWidth = panel.offsetWidth || 320;
+      const preferredLeft = rect.right + gap;
+      const fallbackLeft = rect.left - panelWidth - gap;
+      const left = preferredLeft + panelWidth <= window.innerWidth - 12
+        ? preferredLeft : Math.max(12, fallbackLeft);
+      const maxTop = Math.max(12, window.innerHeight - panel.offsetHeight - 12);
+      panel.style.left = `${Math.round(left)}px`;
+      panel.style.top = `${Math.round(Math.min(Math.max(12, rect.top), maxTop))}px`;
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+    }
+
     function createLogPanel(page = 'jobs') {
       if (panel) return;
       const style = document.createElement('style');
       style.id = `${LOG_PANEL_ID}-style`;
       style.textContent = `
         #${LOG_PANEL_ID} {
-          position: fixed; top: 84px; right: 372px; z-index: 2147483644;
+          position: fixed; top: 84px; left: 372px; z-index: 2147483644;
           width: 320px; max-width: calc(100vw - 380px); height: 430px;
           overflow: hidden; color: #203e3b; background: #fff;
           border: 1px solid #dcece7; border-radius: 16px;
           box-shadow: 0 12px 40px rgba(19, 68, 57, .16);
           font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
-        #${LOG_PANEL_ID}.chat-position { top: auto; right: 396px; bottom: 84px; }
+        #${LOG_PANEL_ID}.chat-position { top: 84px; left: 396px; }
         #${LOG_PANEL_ID} .boss-auto-log-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 14px; color:#164d43; background:#eef8f3; border-bottom:1px solid #e4efe9; cursor:grab; user-select:none; }
         #${LOG_PANEL_ID} .boss-auto-log-title { font-size:14px; font-weight:700; }
         #${LOG_PANEL_ID} .boss-auto-log-count { display:inline-flex; min-width:20px; height:20px; align-items:center; justify-content:center; margin-left:5px; padding:0 5px; color:#187a64; background:#d9f1e5; border-radius:10px; font-size:10px; }
@@ -59,7 +80,7 @@
         #${LOG_PANEL_ID} .boss-auto-log-entry[data-type="error"] span { color:#c93636; }
         #${LOG_PANEL_ID}.collapsed { width:190px; height:auto; }
         #${LOG_PANEL_ID}.collapsed .boss-auto-log-list { display:none; }
-        @media (max-width: 900px) { #${LOG_PANEL_ID} { right:20px; top:auto; bottom:84px; max-width:calc(100vw - 24px); } #${LOG_PANEL_ID}.chat-position { right:20px; } }
+        @media (max-width: 900px) { #${LOG_PANEL_ID} { max-width:calc(100vw - 24px); } }
       `;
       document.head.appendChild(style);
       panel = document.createElement('section');
@@ -86,21 +107,40 @@
         panel.querySelector('.boss-auto-log-collapse').setAttribute('aria-expanded', String(!collapsed));
       });
       render();
+      syncPosition();
     }
 
     function removeLogPanel() {
       panel?.remove();
       document.getElementById(`${LOG_PANEL_ID}-style`)?.remove();
+      if (positionTimer) window.clearInterval(positionTimer);
+      resizeObserver?.disconnect();
       panel = null;
       list = null;
       count = null;
+      targetId = '';
+      positionTimer = null;
+      resizeObserver = null;
     }
 
     function setPage(page) {
       if (!panel) return;
       panel.classList.toggle('chat-position', page === 'chat');
+      syncPosition();
     }
 
-    return { add, createLogPanel, removeLogPanel, setPage };
+    function setTarget(nextTargetId) {
+      targetId = nextTargetId || '';
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      syncPosition();
+      if (!positionTimer) positionTimer = window.setInterval(syncPosition, 250);
+      if (!resizeObserver && window.ResizeObserver) {
+        resizeObserver = new ResizeObserver(syncPosition);
+        resizeObserver.observe(target);
+      }
+    }
+
+    return { add, createLogPanel, removeLogPanel, setPage, setTarget };
   };
 })();

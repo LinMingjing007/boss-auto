@@ -109,6 +109,13 @@
         #${SETTINGS_VIEW_ID} .boss-auto-settings-card { max-width: 760px; margin: 0 auto; padding: 24px; background: #fff; border: 1px solid #dcece7; border-radius: 18px; box-shadow: 0 18px 60px rgba(19, 68, 57, .16); }
         #${SETTINGS_VIEW_ID} h2 { margin: 0; font-size: 20px; } #${SETTINGS_VIEW_ID} h3 { margin: 24px 0 10px; font-size: 15px; }
         #${SETTINGS_VIEW_ID} .boss-auto-settings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-section { margin-top: 20px; padding: 18px; background: #fbfdfc; border: 1px solid #e8f0eb; border-radius: 14px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-section h3 { margin: 0 0 12px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-section > :last-child { margin-bottom: 0; }
+        #${SETTINGS_VIEW_ID} .boss-auto-section-hint { display: block; margin: -3px 0 12px; color: #71857c; font-size: 12px; line-height: 1.6; }
+        #${SETTINGS_VIEW_ID} .boss-auto-ai-toggle { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 12px; color: #245247; background: #eff8f3; border-radius: 9px; font-weight: 600; }
+        #${SETTINGS_VIEW_ID} .boss-auto-ai-toggle input { width: 16px; height: 16px; margin: 0; accent-color: #187a64; }
+        #${SETTINGS_VIEW_ID} .boss-auto-ai-details { margin-top: 14px; padding-top: 4px; border-top: 1px dashed #dcece3; }
         #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-top: 20px; padding: 12px; background: #f7faf8; border-radius: 10px; }
         #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar label { flex: 1 1 220px; margin: 0; }
         #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar button { min-height: 34px; padding: 6px 9px; font-size: 12px; }
@@ -142,28 +149,40 @@
             <button type="button" class="boss-auto-rename-version">重命名</button>
             <button type="button" class="boss-auto-delete-version">删除版本</button>
           </div>
-          <h3>职位筛选</h3>
-          <label><span>职位关键词</span><input type="text" name="keywords" value="${escapeHtml(config.keywords)}"></label>
-          <label><span>工作地点</span><input type="text" name="locations" value="${escapeHtml(config.locations)}"></label>
-          <label><span>屏蔽词</span><input type="text" name="blockedWords" value="${escapeHtml(config.blockedWords)}"></label>
-          <h3>招聘者在线状态</h3>
-          <div class="boss-auto-status-options"><label><input type="radio" name="onlineStatusMode" value="不限" ${config.onlineStatusMode === '不限' ? 'checked' : ''}> 不限</label><span class="boss-auto-status-checkboxes"></span></div>
-          <small class="boss-auto-status-capability">${onlineStatusFieldAvailable === false ? '当前页面不支持在线状态筛选' : '在线状态将在职位详情加载后确认'}</small>
-          <label><span>未知状态</span><select name="unknownOnlineStatusPolicy"><option value="skip">跳过职位</option><option value="keep">允许继续</option></select></label>
-          <h3>AI 职位判别</h3>
-          <label><span><input type="checkbox" name="aiEnabled" ${config.aiEnabled ? 'checked' : ''}> 启用 AI 判别</span></label>
-          <small>打开职位详情后，系统会把已读取的岗位信息和下方提示词发送给 AI，作为是否点击“立即沟通”的判断因素。</small>
-          <label><span>AI 接口地址</span><input type="text" name="aiEndpoint" value="${escapeHtml(config.aiEndpoint)}" placeholder="例如：https://api.openai.com/v1/chat/completions"></label>
-          <label><span>模型选择</span><select name="aiModel">${aiModelOptions(config.aiModel)}</select></label>
-          <label class="boss-auto-custom-model-field" style="${AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? 'display:none;' : ''}"><span>自定义模型名称</span><input type="text" name="aiCustomModel" value="${escapeHtml(AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? '' : config.aiModel)}" placeholder="例如：gpt-4o-mini"></label>
-          <label><span>API Key</span><input type="password" name="aiApiKey" value="${escapeHtml(config.aiApiKey)}" placeholder="仅保存在当前浏览器"></label>
-          <label><span>判断提示词</span><textarea name="aiPrompt" placeholder="请根据岗位信息判断是否适合我，并只返回 JSON：{&quot;pass&quot;:true,&quot;score&quot;:0-100,&quot;reason&quot;:&quot;...&quot;}">${escapeHtml(config.aiPrompt)}</textarea></label>
-          <label><span>AI 调用失败时</span><select name="aiFailurePolicy"><option value="skip" ${config.aiFailurePolicy === 'skip' ? 'selected' : ''}>跳过职位</option><option value="keep" ${config.aiFailurePolicy === 'keep' ? 'selected' : ''}>允许继续</option></select></label>
-          <h3>多轮聊天消息</h3>
-          <small>按保存顺序发送；单张图片不超过 1MB。</small>
-          <div class="boss-auto-message-list"></div>
-          <button type="button" class="boss-auto-add-text">+ 添加文字</button>
-          <button type="button" class="boss-auto-add-image">+ 添加图片</button>
+          <div class="boss-auto-settings-section">
+            <h3>职位筛选</h3>
+            <span class="boss-auto-section-hint">用于从职位列表中筛选符合方向的岗位，多个条件用 “-” 分隔。</span>
+            <label><span>职位关键词</span><input type="text" name="keywords" value="${escapeHtml(config.keywords)}"></label>
+            <label><span>工作地点</span><input type="text" name="locations" value="${escapeHtml(config.locations)}"></label>
+            <label><span>屏蔽词</span><input type="text" name="blockedWords" value="${escapeHtml(config.blockedWords)}"></label>
+          </div>
+          <div class="boss-auto-settings-section">
+            <h3>招聘者在线状态</h3>
+            <span class="boss-auto-section-hint">只处理指定活跃状态的招聘者；选择“不限”表示不进行状态筛选。</span>
+            <div class="boss-auto-status-options"><label><input type="radio" name="onlineStatusMode" value="不限" ${config.onlineStatusMode === '不限' ? 'checked' : ''}> 不限</label><span class="boss-auto-status-checkboxes"></span></div>
+            <small class="boss-auto-status-capability">${onlineStatusFieldAvailable === false ? '当前页面不支持在线状态筛选' : '在线状态将在职位详情加载后确认'}</small>
+            <label><span>未知状态</span><select name="unknownOnlineStatusPolicy"><option value="skip">跳过职位</option><option value="keep">允许继续</option></select></label>
+          </div>
+          <div class="boss-auto-settings-section">
+            <h3>AI 职位判别</h3>
+            <label class="boss-auto-ai-toggle"><input type="checkbox" name="aiEnabled" ${config.aiEnabled ? 'checked' : ''}> 启用 AI 判别</label>
+            <span class="boss-auto-section-hint">打开职位详情后，系统会把已读取的岗位信息和下方提示词发送给 AI，作为是否点击“立即沟通”的判断因素。</span>
+            <div class="boss-auto-ai-details">
+              <label><span>AI 接口地址</span><input type="text" name="aiEndpoint" value="${escapeHtml(config.aiEndpoint)}" placeholder="例如：https://api.openai.com/v1/chat/completions"></label>
+              <label><span>模型选择</span><select name="aiModel">${aiModelOptions(config.aiModel)}</select></label>
+              <label class="boss-auto-custom-model-field" style="${AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? 'display:none;' : ''}"><span>自定义模型名称</span><input type="text" name="aiCustomModel" value="${escapeHtml(AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? '' : config.aiModel)}" placeholder="例如：gpt-4o-mini"></label>
+              <label><span>API Key</span><input type="password" name="aiApiKey" value="${escapeHtml(config.aiApiKey)}" placeholder="仅保存在当前浏览器"></label>
+              <label><span>判断提示词</span><textarea name="aiPrompt" placeholder="请根据岗位信息判断是否适合我，并只返回 JSON：{&quot;pass&quot;:true,&quot;score&quot;:0-100,&quot;reason&quot;:&quot;...&quot;}">${escapeHtml(config.aiPrompt)}</textarea></label>
+              <label><span>AI 调用失败时</span><select name="aiFailurePolicy"><option value="skip" ${config.aiFailurePolicy === 'skip' ? 'selected' : ''}>跳过职位</option><option value="keep" ${config.aiFailurePolicy === 'keep' ? 'selected' : ''}>允许继续</option></select></label>
+            </div>
+          </div>
+          <div class="boss-auto-settings-section">
+            <h3>多轮聊天消息</h3>
+            <span class="boss-auto-section-hint">按保存顺序发送，支持文字和图片消息。</span>
+            <div class="boss-auto-message-list"></div>
+            <button type="button" class="boss-auto-add-text">+ 添加文字</button>
+            <button type="button" class="boss-auto-add-image">+ 添加图片</button>
+          </div>
           <div class="boss-auto-actions"><button type="button" class="boss-auto-close-settings">取消</button><button type="button" class="boss-auto-save-settings">保存设置</button></div>
         </div>
       `;
@@ -245,6 +264,14 @@
         recreateVersionView();
       });
       const markSettingsDirty = () => { settingsViewDirty = true; };
+      const aiToggle = view.querySelector('[name="aiEnabled"]');
+      const aiDetails = view.querySelector('.boss-auto-ai-details');
+      const updateAiDetailsVisibility = () => { aiDetails.hidden = !aiToggle.checked; };
+      updateAiDetailsVisibility();
+      aiToggle.addEventListener('change', () => {
+        updateAiDetailsVisibility();
+        markSettingsDirty();
+      });
       view.querySelector('[name="unknownOnlineStatusPolicy"]').value = config.unknownOnlineStatusPolicy;
   
       const statusBox = view.querySelector('.boss-auto-status-checkboxes');

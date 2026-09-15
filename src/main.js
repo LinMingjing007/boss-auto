@@ -24,12 +24,12 @@
    */
   function isJobsPage() {
     return location.hostname === 'www.zhipin.com'
-      && location.pathname === TARGET_PATH;
+      && location.pathname.replace(/\/+$/, '') === TARGET_PATH;
   }
 
   function isChatPage() {
     return location.hostname === 'www.zhipin.com'
-      && location.pathname === '/web/geek/chat';
+      && location.pathname.replace(/\/+$/, '') === '/web/geek/chat';
   }
 
   function setStatus(message, type = 'info') {
@@ -41,7 +41,11 @@
     status.dataset.type = type;
   }
   window.BossAutoSetStatus = setStatus;
-  window.BossAutoLogInstance = window.BossAutoLog({ LOG_PANEL_ID, escapeHtml });
+  window.BossAutoLogInstance = typeof window.BossAutoLog === 'function'
+    ? window.BossAutoLog({ LOG_PANEL_ID, escapeHtml })
+    : {
+      add() {}, createLogPanel() {}, removeLogPanel() {}, setPage() {}, setTarget() {},
+    };
 
 
   const settings = window.BossAutoSettings({
@@ -377,7 +381,7 @@
       document.getElementById(`${CHAT_PANEL_ID}-style`)?.remove();
     }
     if (!isJobsPage() && !isChatPage()) {
-      window.BossAutoLogInstance.removeLogPanel();
+      window.BossAutoLogInstance?.removeLogPanel();
     }
   }
 
@@ -390,16 +394,18 @@
 
     if (isJobsPage()) {
       createStatusPanel();
+      createSettingsPanel();
       window.BossAutoLogInstance.createLogPanel('jobs');
       window.BossAutoLogInstance.setPage('jobs');
-      createSettingsPanel();
+      window.BossAutoLogInstance.setTarget(PANEL_ID);
       setStatus('检测到职位列表页变化，准备触发…');
       runAutomation();
     } else if (isChatPage()) {
       createStatusPanel();
+      createChatPanel();
       window.BossAutoLogInstance.createLogPanel('chat');
       window.BossAutoLogInstance.setPage('chat');
-      createChatPanel();
+      window.BossAutoLogInstance.setTarget(CHAT_PANEL_ID);
       setStatus('聊天页面已就绪，请点击“开始沟通”');
     }
   }
@@ -416,12 +422,17 @@
       return;
     }
     createStatusPanel();
-    window.BossAutoLogInstance.createLogPanel(isJobsPage() ? 'jobs' : 'chat');
     if (isJobsPage()) {
       createSettingsPanel();
+      window.BossAutoLogInstance.createLogPanel('jobs');
+      window.BossAutoLogInstance.setPage('jobs');
+      window.BossAutoLogInstance.setTarget(PANEL_ID);
       runAutomation();
     } else {
       createChatPanel();
+      window.BossAutoLogInstance.createLogPanel('chat');
+      window.BossAutoLogInstance.setPage('chat');
+      window.BossAutoLogInstance.setTarget(CHAT_PANEL_ID);
       setStatus('聊天页面已就绪，请点击“开始沟通”');
     }
   }
