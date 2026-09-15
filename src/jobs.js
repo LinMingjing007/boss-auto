@@ -368,7 +368,7 @@
               tool_choice: { type: 'function', function: { name: 'job_match_decision' } },
             } : { response_format: { type: 'json_object' } }),
             messages: [
-              { role: 'system', content: `${config.aiPrompt}\n\n请严格只返回 JSON，格式为：{"pass":true或false,"score":0到100,"reason":"简短理由","risks":"风险，没有则为空"}。` },
+              { role: 'system', content: [config.resumePrompt, config.aiPrompt].filter(Boolean).join('\n\n') },
               { role: 'user', content: `请判断以下职位信息：\n${JSON.stringify(knownInfo, null, 2)}` },
             ],
           }),

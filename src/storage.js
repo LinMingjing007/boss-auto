@@ -20,6 +20,7 @@
       aiEndpoint: overrides.aiEndpoint || 'https://api.deepseek.com/chat/completions',
       aiModel: overrides.aiModel || 'deepseek-v4-flash',
       aiApiKey: overrides.aiApiKey || '',
+      resumePrompt: overrides.resumePrompt || '',
       aiPrompt: overrides.aiPrompt || '',
       aiFailurePolicy: overrides.aiFailurePolicy || 'skip',
       messageInterval: { min: MESSAGE_INTERVAL_MS, max: MESSAGE_INTERVAL_MS },

@@ -172,7 +172,8 @@
               <label><span>模型选择</span><select name="aiModel">${aiModelOptions(config.aiModel)}</select></label>
               <label class="boss-auto-custom-model-field" style="${AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? 'display:none;' : ''}"><span>自定义模型名称</span><input type="text" name="aiCustomModel" value="${escapeHtml(AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? '' : config.aiModel)}" placeholder="例如：gpt-4o-mini"></label>
               <label><span>API Key</span><input type="password" name="aiApiKey" value="${escapeHtml(config.aiApiKey)}" placeholder="仅保存在当前浏览器"></label>
-              <label><span>判断提示词</span><textarea name="aiPrompt" placeholder="请根据岗位信息判断是否适合我，并只返回 JSON：{&quot;pass&quot;:true,&quot;score&quot;:0-100,&quot;reason&quot;:&quot;...&quot;}">${escapeHtml(config.aiPrompt)}</textarea></label>
+              <label><span>简历提示词</span><textarea name="resumePrompt" placeholder="描述求职者的经历、技能、期望或其他需要 AI 参考的信息。">${escapeHtml(config.resumePrompt)}</textarea></label>
+              <label><span>判断提示词</span><textarea name="aiPrompt" placeholder="请根据岗位信息判断是否适合我。">${escapeHtml(config.aiPrompt)}</textarea></label>
               <label><span>AI 调用失败时</span><select name="aiFailurePolicy"><option value="skip" ${config.aiFailurePolicy === 'skip' ? 'selected' : ''}>跳过职位</option><option value="keep" ${config.aiFailurePolicy === 'keep' ? 'selected' : ''}>允许继续</option></select></label>
             </div>
           </div>
@@ -375,6 +376,7 @@
           aiEndpoint: view.querySelector('[name="aiEndpoint"]').value.trim(),
           aiModel: selectedAiModel,
           aiApiKey: view.querySelector('[name="aiApiKey"]').value.trim(),
+          resumePrompt: view.querySelector('[name="resumePrompt"]').value.trim(),
           aiPrompt: view.querySelector('[name="aiPrompt"]').value.trim(),
           aiFailurePolicy: view.querySelector('[name="aiFailurePolicy"]').value,
           messageSequence: messages,
