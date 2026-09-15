@@ -8,6 +8,7 @@
     let panel = null;
     let list = null;
     let count = null;
+    let resizeObserver = null;
 
     function render() {
       if (!list) return;
@@ -56,6 +57,9 @@
         #${CHAT_PANEL_ID}.boss-auto-unified-panel > #${LOG_PANEL_ID} { grid-column: 2; grid-row: 2 / span 5; }
         #${PANEL_ID}.boss-auto-unified-panel.collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.collapsed { display: block; width: 190px; min-width: 190px; }
         #${PANEL_ID}.boss-auto-unified-panel.collapsed > #${LOG_PANEL_ID}, #${CHAT_PANEL_ID}.boss-auto-unified-panel.collapsed > #${LOG_PANEL_ID} { display: none; }
+        #${PANEL_ID}.boss-auto-unified-panel.compact, #${CHAT_PANEL_ID}.boss-auto-unified-panel.compact { display: block; }
+        #${PANEL_ID}.boss-auto-unified-panel.compact > .boss-auto-panel-body { max-height: 360px; overflow: auto; }
+        #${CHAT_PANEL_ID}.boss-auto-unified-panel.compact > #${LOG_PANEL_ID} { border-top: 1px solid #e4efe9; border-left: 0; }
         #${LOG_PANEL_ID}.integrated { position: relative; top: auto; right: auto; bottom: auto; left: auto; z-index: auto; width: auto; max-width: none; height: auto; min-height: 0; max-height: none; border: 0; border-left: 1px solid #e4efe9; border-radius: 0; box-shadow: none; }
         #${LOG_PANEL_ID}.integrated .boss-auto-log-list { min-height: 180px; height: 100%; }
         #${LOG_PANEL_ID} .boss-auto-log-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 14px; color:#164d43; background:#eef8f3; border-bottom:1px solid #e4efe9; cursor:grab; user-select:none; }
@@ -107,6 +111,8 @@
       panel = null;
       list = null;
       count = null;
+      resizeObserver?.disconnect();
+      resizeObserver = null;
     }
 
     function setPage(page) {
@@ -120,6 +126,16 @@
       target.classList.add('boss-auto-unified-panel');
       panel.classList.add('integrated');
       target.appendChild(panel);
+      const updateLayout = () => {
+        if (!target.isConnected) return;
+        target.classList.toggle('compact', target.getBoundingClientRect().width < 640);
+      };
+      updateLayout();
+      if (window.ResizeObserver) {
+        resizeObserver?.disconnect();
+        resizeObserver = new ResizeObserver(updateLayout);
+        resizeObserver.observe(target);
+      }
     }
 
     return { add, createLogPanel, removeLogPanel, setPage, attachTo };
