@@ -5,7 +5,7 @@
     const {
       PANEL_ID, SETTINGS_VIEW_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS,
       loadConfig, saveConfig, handleImageFileSelection, setStatus, escapeHtml,
-      jobBridge,
+      jobBridge, loadConfigStore, saveConfigStore, setActiveVersion, isConfigSwitchLocked,
     } = context;
     let settingsViewDirty = false;
     let onlineStatusFieldAvailable = null;
@@ -33,6 +33,37 @@
       button.textContent = '设置';
       button.addEventListener('click', openSettingsView);
       container.appendChild(button);
+    }
+
+    function versionOptions(store) {
+      return store.versions.map((version) => (
+        `<option value="${escapeHtml(version.id)}" ${version.id === store.activeVersionId ? 'selected' : ''}>${escapeHtml(version.name)}</option>`
+      )).join('');
+    }
+
+    function switchVersion(versionId) {
+      if (isConfigSwitchLocked()) {
+        setStatus('自动任务运行中，暂时不能切换配置版本', 'error');
+        return false;
+      }
+      try {
+        setActiveVersion(versionId);
+        window.dispatchEvent(new Event('boss-auto-config-changed'));
+        setStatus(`已切换到配置版本：${loadConfig().versionName}`, 'success');
+        return true;
+      } catch (error) {
+        setStatus(`配置版本切换失败：${error.message}`, 'error');
+        return false;
+      }
+    }
+
+    function bindVersionSelector(container) {
+      const selector = container?.querySelector('.boss-auto-version-select');
+      if (!selector) return;
+      selector.addEventListener('change', () => {
+        const previous = loadConfig().versionId;
+        if (!switchVersion(selector.value)) selector.value = previous;
+      });
     }
   
     function openSettingsView() {
@@ -63,6 +94,7 @@
       if (document.getElementById(SETTINGS_VIEW_ID)) return;
   
       const config = loadConfig();
+      const store = loadConfigStore();
       const style = document.createElement('style');
       style.id = `${SETTINGS_VIEW_ID}-style`;
       style.textContent = `
@@ -70,6 +102,9 @@
         #${SETTINGS_VIEW_ID} .boss-auto-settings-card { max-width: 760px; margin: 0 auto; padding: 24px; background: #fff; border: 1px solid #dcece7; border-radius: 18px; box-shadow: 0 18px 60px rgba(19, 68, 57, .16); }
         #${SETTINGS_VIEW_ID} h2 { margin: 0; font-size: 20px; } #${SETTINGS_VIEW_ID} h3 { margin: 24px 0 10px; font-size: 15px; }
         #${SETTINGS_VIEW_ID} .boss-auto-settings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-top: 20px; padding: 12px; background: #f7faf8; border-radius: 10px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar label { flex: 1 1 220px; margin: 0; }
+        #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar button { min-height: 34px; padding: 6px 9px; font-size: 12px; }
         #${SETTINGS_VIEW_ID} label { display: block; margin: 12px 0; } #${SETTINGS_VIEW_ID} label > span { display:block; margin-bottom: 5px; font-weight: 600; }
         #${SETTINGS_VIEW_ID} input[type="text"], #${SETTINGS_VIEW_ID} textarea { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #dce8e2; border-radius: 9px; background: #fafcfb; font: inherit; }
         #${SETTINGS_VIEW_ID} textarea { min-height: 72px; resize: vertical; }
@@ -93,6 +128,13 @@
       view.innerHTML = `
         <div class="boss-auto-settings-card">
           <div class="boss-auto-settings-head"><h2>Boss Auto 设置</h2><button type="button" class="boss-auto-close-settings">返回</button></div>
+          <div class="boss-auto-version-toolbar">
+            <label><span>当前配置版本</span><select class="boss-auto-version-select">${versionOptions(store)}</select></label>
+            <button type="button" class="boss-auto-new-version">新建版本</button>
+            <button type="button" class="boss-auto-copy-version">复制版本</button>
+            <button type="button" class="boss-auto-rename-version">重命名</button>
+            <button type="button" class="boss-auto-delete-version">删除版本</button>
+          </div>
           <h3>职位筛选</h3>
           <label><span>职位关键词</span><input type="text" name="keywords" value="${escapeHtml(config.keywords)}"></label>
           <label><span>工作地点</span><input type="text" name="locations" value="${escapeHtml(config.locations)}"></label>
@@ -110,6 +152,73 @@
         </div>
       `;
       document.body.appendChild(view);
+      const recreateVersionView = () => {
+        settingsViewDirty = false;
+        view.remove();
+        document.getElementById(`${SETTINGS_VIEW_ID}-style`)?.remove();
+        createSettingsView();
+        document.getElementById(SETTINGS_VIEW_ID).hidden = false;
+      };
+      view.querySelector('.boss-auto-version-select').addEventListener('change', (event) => {
+        const selector = event.currentTarget;
+        const previous = loadConfig().versionId;
+        if (settingsViewDirty && !window.confirm('当前版本有未保存修改，确定切换并放弃修改吗？')) {
+          selector.value = previous;
+          return;
+        }
+        if (switchVersion(selector.value)) recreateVersionView();
+        else selector.value = previous;
+      });
+      view.querySelector('.boss-auto-new-version').addEventListener('click', () => {
+        if (isConfigSwitchLocked()) { setStatus('自动任务运行中，暂时不能切换配置版本', 'error'); return; }
+        const name = window.prompt('请输入配置版本名称', `配置 ${loadConfigStore().versions.length + 1}`)?.trim();
+        if (!name) return;
+        const current = loadConfig();
+        const id = `version-${Date.now()}`;
+        const storeNow = loadConfigStore();
+        storeNow.versions.push({ ...current, id, name, versionId: undefined, versionName: undefined });
+        storeNow.activeVersionId = id;
+        saveConfigStore(storeNow);
+        window.dispatchEvent(new Event('boss-auto-config-changed'));
+        recreateVersionView();
+      });
+      view.querySelector('.boss-auto-copy-version').addEventListener('click', () => {
+        if (isConfigSwitchLocked()) { setStatus('自动任务运行中，暂时不能切换配置版本', 'error'); return; }
+        const current = loadConfig();
+        const name = window.prompt('请输入复制版本名称', `${current.versionName} 副本`)?.trim();
+        if (!name) return;
+        const id = `version-${Date.now()}`;
+        const storeNow = loadConfigStore();
+        storeNow.versions.push({ ...current, id, name, versionId: undefined, versionName: undefined });
+        storeNow.activeVersionId = id;
+        saveConfigStore(storeNow);
+        window.dispatchEvent(new Event('boss-auto-config-changed'));
+        recreateVersionView();
+      });
+      view.querySelector('.boss-auto-rename-version').addEventListener('click', () => {
+        if (isConfigSwitchLocked()) { setStatus('自动任务运行中，暂时不能修改配置版本', 'error'); return; }
+        const current = loadConfig();
+        const name = window.prompt('请输入新的版本名称', current.versionName)?.trim();
+        if (!name) return;
+        const storeNow = loadConfigStore();
+        const target = storeNow.versions.find((version) => version.id === storeNow.activeVersionId);
+        if (target) target.name = name;
+        saveConfigStore(storeNow);
+        window.dispatchEvent(new Event('boss-auto-config-changed'));
+        recreateVersionView();
+      });
+      view.querySelector('.boss-auto-delete-version').addEventListener('click', () => {
+        if (isConfigSwitchLocked()) { setStatus('自动任务运行中，暂时不能删除配置版本', 'error'); return; }
+        const storeNow = loadConfigStore();
+        if (storeNow.versions.length <= 1) { setStatus('至少需要保留一个配置版本', 'error'); return; }
+        const current = loadConfig();
+        if (!window.confirm(`确定删除配置版本“${current.versionName}”吗？`)) return;
+        storeNow.versions = storeNow.versions.filter((version) => version.id !== storeNow.activeVersionId);
+        storeNow.activeVersionId = storeNow.versions[0].id;
+        saveConfigStore(storeNow);
+        window.dispatchEvent(new Event('boss-auto-config-changed'));
+        recreateVersionView();
+      });
       const markSettingsDirty = () => { settingsViewDirty = true; };
       view.querySelector('[name="unknownOnlineStatusPolicy"]').value = config.unknownOnlineStatusPolicy;
   
@@ -182,7 +291,7 @@
         if (item.checked) view.querySelector('[name="onlineStatusMode"]').checked = false;
         markSettingsDirty();
       }));
-      view.querySelectorAll('input[type="text"], select, textarea').forEach((input) => input.addEventListener('change', markSettingsDirty));
+      view.querySelectorAll('input[type="text"], select:not(.boss-auto-version-select), textarea').forEach((input) => input.addEventListener('change', markSettingsDirty));
       view.querySelector('.boss-auto-save-settings').addEventListener('click', () => {
         const unlimited = view.querySelector('[name="onlineStatusMode"]').checked;
         const selected = [...view.querySelectorAll('[name="selectedOnlineStatuses"]:checked')].map((item) => item.value);
@@ -241,6 +350,12 @@
           <div class="boss-auto-intro"><span>职位偏好</span><small>仅配置</small></div>
           <p class="boss-auto-description">记下你的期待，让下一份工作更合心意。</p>
           <label>
+            <span>配置版本</span>
+            <select class="boss-auto-version-select" style="display:block;width:100%;height:42px;padding:0 12px;border:1px solid #e1eae5;border-radius:10px;color:#243e34;background:#f8faf9;font:inherit;">
+              ${versionOptions(loadConfigStore())}
+            </select>
+          </label>
+          <label>
             <span>职位关键词</span>
             <input name="keywords" value="${escapeHtml(config.keywords)}" placeholder="例如：前端-React-Node.js">
           </label>
@@ -259,6 +374,17 @@
       `;
       document.body.appendChild(panel);
       addSettingsButton(panel.querySelector('.boss-auto-panel-body'));
+      bindVersionSelector(panel);
+      window.addEventListener('boss-auto-config-changed', () => {
+        const current = loadConfig();
+        const selector = panel.querySelector('.boss-auto-version-select');
+        if (selector) selector.innerHTML = versionOptions(loadConfigStore());
+        if (selector) selector.value = current.versionId;
+        ['keywords', 'locations', 'blockedWords'].forEach((name) => {
+          const input = panel.querySelector(`[name="${name}"]`);
+          if (input) input.value = current[name];
+        });
+      });
   
       const header = panel.querySelector('.boss-auto-panel-header');
       let dragging = false;

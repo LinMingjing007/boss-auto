@@ -6,6 +6,7 @@
       CHAT_PANEL_ID, MESSAGE_INTERVAL_MS,
       loadConfig, getMessageRecordKey, hasMessageRecord, saveMessageRecord,
       setStatus, addSettingsButton, isChatPage, randomDelay,
+      loadConfigStore, setActiveVersion, setMonitoringState,
     } = context;
     let chatMonitorTimer = null;
     let chatMonitorObserver = null;
@@ -16,6 +17,12 @@
     let chatMonitorRunId = 0;
     const chatCardSignatures = new Map();
     const chatProcessingKeys = new Set();
+
+    function versionOptions(store) {
+      return store.versions.map((version) => (
+        `<option value="${String(version.id).replace(/"/g, '&quot;')}" ${version.id === store.activeVersionId ? 'selected' : ''}>${String(version.name).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]))}</option>`
+      )).join('');
+    }
 
     function createChatPanel() {
       const existing = document.getElementById(CHAT_PANEL_ID);
@@ -64,6 +71,7 @@
         }
         #${CHAT_PANEL_ID} .add-message { color: #4e6c5c; background: #f6f9f7; border: 1px solid #e1e8e3; }
         #${CHAT_PANEL_ID} .start-chat { color: #fff; background: #187a64; }
+        #${CHAT_PANEL_ID} .boss-auto-version-select { display: block; width: 100%; height: 36px; margin: 8px 0; padding: 0 9px; color: #243e34; background: #f8faf9; border: 1px solid #e1eae5; border-radius: 9px; font: inherit; }
         #${CHAT_PANEL_ID} button:hover { filter: brightness(.97); }
       `;
       document.head.appendChild(style);
@@ -73,11 +81,29 @@
       panel.innerHTML = `
         <div class="chat-panel-header"><h3>聊天监听</h3><div><button type="button" class="chat-collapse" title="收起悬浮窗" aria-label="收起悬浮窗" aria-expanded="true">−</button></div></div>
         <p>模板、图片和在线状态统一在“设置”页面修改；消息间隔固定为 30 毫秒。</p>
+        <select class="boss-auto-version-select" aria-label="当前配置版本">${versionOptions(loadConfigStore())}</select>
         <div class="chat-config-summary"></div>
         <button type="button" class="start-chat">开始沟通</button>
       `;
       document.body.appendChild(panel);
       addSettingsButton(panel);
+      const versionSelector = panel.querySelector('.boss-auto-version-select');
+      versionSelector.addEventListener('change', () => {
+        const previous = loadConfig().versionId;
+        if (chatMonitorTimer) {
+          setStatus('聊天监听运行中，暂时不能切换配置版本', 'error');
+          versionSelector.value = previous;
+          return;
+        }
+        try {
+          setActiveVersion(versionSelector.value);
+          window.dispatchEvent(new Event('boss-auto-config-changed'));
+          setStatus(`已切换到配置版本：${loadConfig().versionName}`, 'success');
+        } catch (error) {
+          versionSelector.value = previous;
+          setStatus(`配置版本切换失败：${error.message}`, 'error');
+        }
+      });
   
       const header = panel.querySelector('.chat-panel-header');
       let dragging = false;
@@ -122,6 +148,8 @@
       const summary = panel.querySelector('.chat-config-summary');
       const refreshSummary = () => {
         const current = loadConfig();
+        versionSelector.innerHTML = versionOptions(loadConfigStore());
+        versionSelector.value = current.versionId;
         const configuredMessages = (current.messageSequence || []).filter((message) => (
           message?.type === 'image' ? message.content : (message?.content || '').trim()
         ));
@@ -549,6 +577,7 @@
       }
       // MutationObserver 是主触发；低频轮询仅作为站点特殊更新方式的兜底。
       chatMonitorTimer = window.setInterval(monitorChatList, 5000);
+      setMonitoringState(true);
       setStatus('已开始监听聊天列表全部会话');
       console.info('[Boss Auto] chat monitor started for all conversations (MutationObserver + fallback)');
     }
@@ -560,6 +589,7 @@
       if (chatMonitorBodyObserver) chatMonitorBodyObserver.disconnect();
       if (chatMonitorDebounceTimer) window.clearTimeout(chatMonitorDebounceTimer);
       chatMonitorTimer = null;
+      setMonitoringState(false);
       chatMonitorObserver = null;
       chatMonitorBodyObserver = null;
       observedChatList = null;

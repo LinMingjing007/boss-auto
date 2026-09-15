@@ -8,6 +8,7 @@
   const { splitTerms } = window.BossAutoStorage;
   let lastUrl = location.href;
   let hasRunForUrl = false;
+  const runtimeState = { chatMonitoring: false };
   const jobBridge = {
     getState: () => ({ paginationRunning: false, deliveryRunning: false, deliveryPaused: false }),
     startDelivery: () => {},
@@ -43,10 +44,17 @@
     PANEL_ID, SETTINGS_VIEW_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS,
     loadConfig: window.BossAutoStorage.loadConfig,
     saveConfig: window.BossAutoStorage.saveConfig,
+    loadConfigStore: window.BossAutoStorage.loadConfigStore,
+    saveConfigStore: window.BossAutoStorage.saveConfigStore,
+    setActiveVersion: window.BossAutoStorage.setActiveVersion,
     handleImageFileSelection: window.BossAutoStorage.handleImageFileSelection,
     setStatus,
     escapeHtml,
     jobBridge,
+    isConfigSwitchLocked: () => {
+      const state = jobBridge.getState();
+      return Boolean(state.paginationRunning || state.deliveryRunning || state.deliveryPaused || runtimeState.chatMonitoring);
+    },
   });
   const {
     getConfig, addSettingsButton, openSettingsView,
@@ -61,6 +69,7 @@
     saveMessageRecord: window.BossAutoStorage.saveMessageRecord,
     setStatus, escapeHtml, addSettingsButton, openSettingsView, isChatPage,
     randomDelay: window.BossAutoStorage.randomDelay,
+    setMonitoringState: (running) => { runtimeState.chatMonitoring = running; },
   });
   const { createChatPanel, stopChatMonitor } = chat;
   const jobs = window.BossAutoJobs({

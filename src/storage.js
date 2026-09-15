@@ -4,37 +4,88 @@
   const { CONFIG_KEY, MESSAGE_RECORDS_KEY, MAX_IMAGE_SIZE_BYTES, MESSAGE_INTERVAL_MS } = window.BossAutoConstants;
   const imageSelectionTokens = new WeakMap();
 
-  function loadConfig() {
+  function createDefaultVersion(overrides = {}) {
+    return {
+      id: overrides.id || `version-${Date.now()}`,
+      name: overrides.name || '默认配置',
+      schemaVersion: 3,
+      keywords: overrides.keywords || '',
+      locations: overrides.locations || '',
+      blockedWords: overrides.blockedWords || '',
+      messageTemplate: overrides.messageTemplate || '',
+      onlineStatusMode: overrides.onlineStatusMode || '不限',
+      selectedOnlineStatuses: Array.isArray(overrides.selectedOnlineStatuses) ? overrides.selectedOnlineStatuses : [],
+      unknownOnlineStatusPolicy: overrides.unknownOnlineStatusPolicy || 'skip',
+      messageInterval: { min: MESSAGE_INTERVAL_MS, max: MESSAGE_INTERVAL_MS },
+      messageSequence: Array.isArray(overrides.messageSequence)
+        ? overrides.messageSequence
+        : (overrides.messageTemplate?.trim()
+          ? [{ id: `msg-${Date.now()}`, type: 'text', content: overrides.messageTemplate }]
+          : []),
+    };
+  }
+
+  function normalizeVersion(version, index = 0) {
+    return createDefaultVersion({
+      ...version,
+      id: version?.id || `version-${index + 1}`,
+      name: version?.name || (index ? `配置 ${index + 1}` : '默认配置'),
+    });
+  }
+
+  function loadConfigStore() {
     try {
       const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
-      const legacyTemplate = saved.messageTemplate || '';
-      return {
-        schemaVersion: saved.schemaVersion || 1,
-        keywords: saved.keywords || '',
-        locations: saved.locations || '',
-        blockedWords: saved.blockedWords || '',
-        messageTemplate: legacyTemplate,
-        onlineStatusMode: saved.onlineStatusMode || '不限',
-        selectedOnlineStatuses: Array.isArray(saved.selectedOnlineStatuses) ? saved.selectedOnlineStatuses : [],
-        unknownOnlineStatusPolicy: saved.unknownOnlineStatusPolicy || 'skip',
-        messageInterval: { min: MESSAGE_INTERVAL_MS, max: MESSAGE_INTERVAL_MS },
-        messageSequence: Array.isArray(saved.messageSequence)
-          ? saved.messageSequence
-          : (legacyTemplate.trim() ? [{ id: `msg-${Date.now()}`, type: 'text', content: legacyTemplate }] : []),
-      };
+      if (Array.isArray(saved.versions) && saved.versions.length) {
+        const versions = saved.versions.map(normalizeVersion);
+        const activeVersionId = versions.some((version) => version.id === saved.activeVersionId)
+          ? saved.activeVersionId : versions[0].id;
+        return { schemaVersion: 3, activeVersionId, versions };
+      }
+
+      // 将旧版扁平配置迁移为单个“默认配置”版本。
+      const legacy = normalizeVersion(saved, 0);
+      return { schemaVersion: 3, activeVersionId: legacy.id, versions: [legacy] };
     } catch {
-      return {
-        schemaVersion: 1,
-        keywords: '', locations: '', blockedWords: '', messageTemplate: '',
-        onlineStatusMode: '不限', selectedOnlineStatuses: [],
-        unknownOnlineStatusPolicy: 'skip', messageSequence: [],
-        messageInterval: { min: MESSAGE_INTERVAL_MS, max: MESSAGE_INTERVAL_MS },
-      };
+      const fallback = createDefaultVersion({ id: 'version-default', name: '默认配置' });
+      return { schemaVersion: 3, activeVersionId: fallback.id, versions: [fallback] };
     }
   }
 
+  function loadConfig() {
+    const store = loadConfigStore();
+    const active = store.versions.find((version) => version.id === store.activeVersionId) || store.versions[0];
+    return { ...active, versionId: active.id, versionName: active.name };
+  }
+
   function saveConfig(config) {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    const store = loadConfigStore();
+    const activeVersionId = config.versionId || store.activeVersionId;
+    const nextVersion = normalizeVersion({
+      ...store.versions.find((version) => version.id === activeVersionId),
+      ...config,
+      id: activeVersionId,
+      name: config.versionName || store.versions.find((version) => version.id === activeVersionId)?.name,
+    });
+    const versions = store.versions.map((version) => version.id === activeVersionId ? nextVersion : version);
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({ schemaVersion: 3, activeVersionId, versions }));
+  }
+
+  function saveConfigStore(store) {
+    const versions = (store.versions || []).map(normalizeVersion);
+    if (!versions.length) throw new Error('至少需要保留一个配置版本');
+    const activeVersionId = versions.some((version) => version.id === store.activeVersionId)
+      ? store.activeVersionId : versions[0].id;
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({ schemaVersion: 3, activeVersionId, versions }));
+  }
+
+  function setActiveVersion(versionId) {
+    const store = loadConfigStore();
+    if (!store.versions.some((version) => version.id === versionId)) {
+      throw new Error('配置版本不存在');
+    }
+    saveConfigStore({ ...store, activeVersionId: versionId });
+    return loadConfig();
   }
 
   function readImageDataUrl(file) {
@@ -147,7 +198,10 @@
 
   window.BossAutoStorage = Object.freeze({
     loadConfig,
+    loadConfigStore,
     saveConfig,
+    saveConfigStore,
+    setActiveVersion,
     handleImageFileSelection,
     getMessageRecordKey,
     hasMessageRecord,
