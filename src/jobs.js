@@ -4,6 +4,7 @@
   window.BossAutoJobs = function createJobsModule(context) {
     const {
       setStatus, getConfig, loadConfig, isJobAllowed, STATUS_OPTIONS, randomDelay,
+      AI_REQUEST_TIMEOUT_MS,
       isJobsPage, updateOnlineStatusCapability,
     } = context;
     let paginationRunning = false;
@@ -288,6 +289,82 @@
       }
       return false;
     }
+
+    function parseAiDecision(content) {
+      const rawContent = Array.isArray(content)
+        ? content.map((item) => typeof item === 'string' ? item : (item?.text || '')).join('')
+        : content;
+      const normalized = String(rawContent || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+      let result;
+      try {
+        result = JSON.parse(normalized);
+      } catch {
+        const match = normalized.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error('AI 返回的内容不是有效 JSON');
+        try { result = JSON.parse(match[0]); } catch { throw new Error('AI 返回的 JSON 无法解析'); }
+      }
+      if (typeof result.pass !== 'boolean') throw new Error('AI 返回结果缺少 pass 布尔值');
+      const score = Number(result.score);
+      return {
+        pass: result.pass,
+        score: Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : null,
+        reason: String(result.reason || result.reasons || '').trim(),
+        risks: String(result.risks || '').trim(),
+      };
+    }
+
+    async function judgeJobWithAi(record, config) {
+      if (!config.aiEndpoint || !config.aiModel || !config.aiApiKey || !config.aiPrompt) {
+        throw new Error('AI 配置不完整');
+      }
+      const detail = document.querySelector('.job-detail-container');
+      if (!detail) throw new Error('未找到职位详情');
+      const detailText = (detail.innerText || detail.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 16000);
+      const knownInfo = {
+        jobName: record.jobName,
+        salary: record.salary,
+        company: record.company,
+        location: record.location,
+        tags: record.tags,
+        url: record.url,
+        detailText,
+      };
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+      try {
+        const isDeepSeek = /deepseek/i.test(`${config.aiEndpoint} ${config.aiModel}`);
+        const response = await fetch(config.aiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${config.aiApiKey}`,
+          },
+          body: JSON.stringify({
+            model: config.aiModel,
+            temperature: 0,
+            ...(isDeepSeek ? {
+              thinking: { type: 'disabled' },
+              response_format: { type: 'json_object' },
+            } : {}),
+            messages: [
+              { role: 'system', content: `${config.aiPrompt}\n\n请严格只返回 JSON，格式为：{"pass":true或false,"score":0到100,"reason":"简短理由","risks":"风险，没有则为空"}。` },
+              { role: 'user', content: `请判断以下职位信息：\n${JSON.stringify(knownInfo, null, 2)}` },
+            ],
+          }),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`AI 接口 HTTP ${response.status}`);
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+        if (!content) throw new Error('AI 接口未返回判断内容');
+        return parseAiDecision(content);
+      } catch (error) {
+        if (error.name === 'AbortError') throw new Error('AI 请求超时');
+        throw error;
+      } finally {
+        window.clearTimeout(timer);
+      }
+    }
   
     async function clickNextDelivery() {
       if (deliveryIndex >= jobRecords.length) {
@@ -339,6 +416,36 @@
           setStatus(`已跳过${record.jobName}：${record.skipReason}`);
           deliveryIndex += 1;
           return;
+        }
+        if (config.aiEnabled) {
+          setStatus(`正在用 AI 判断：${record.jobName}`);
+          try {
+            const aiResult = await judgeJobWithAi(record, config);
+            record.aiPass = aiResult.pass;
+            record.aiScore = aiResult.score;
+            record.aiReason = aiResult.reason;
+            record.aiRisks = aiResult.risks;
+            record.aiCheckedAt = new Date().toISOString();
+            if (!aiResult.pass) {
+              record.status = 'skipped';
+              record.skipReason = `AI 判别未通过${aiResult.reason ? `：${aiResult.reason}` : ''}`;
+              setStatus(`已跳过${record.jobName}：${record.skipReason}`);
+              deliveryIndex += 1;
+              return;
+            }
+            setStatus(`AI 判别通过${aiResult.score === null ? '' : `（${aiResult.score}分）`}：${record.jobName}`, 'success');
+          } catch (error) {
+            record.aiError = error.message;
+            record.aiCheckedAt = new Date().toISOString();
+            if (config.aiFailurePolicy !== 'keep') {
+              record.status = 'skipped';
+              record.skipReason = `AI 判别失败：${error.message}`;
+              setStatus(`已跳过${record.jobName}：${record.skipReason}`, 'error');
+              deliveryIndex += 1;
+              return;
+            }
+            setStatus(`AI 判别失败，按设置继续：${error.message}`);
+          }
         }
         const chatButton = await waitForChatButton();
         if (chatButton.classList.contains('is-disabled')

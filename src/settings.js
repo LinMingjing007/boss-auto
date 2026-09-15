@@ -3,7 +3,7 @@
 
   window.BossAutoSettings = function createSettingsModule(context) {
     const {
-      PANEL_ID, SETTINGS_VIEW_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS,
+      PANEL_ID, SETTINGS_VIEW_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS, AI_MODEL_OPTIONS,
       loadConfig, saveConfig, handleImageFileSelection, setStatus, escapeHtml,
       jobBridge, loadConfigStore, saveConfigStore, setActiveVersion, isConfigSwitchLocked,
     } = context;
@@ -38,6 +38,13 @@
     function versionOptions(store) {
       return store.versions.map((version) => (
         `<option value="${escapeHtml(version.id)}" ${version.id === store.activeVersionId ? 'selected' : ''}>${escapeHtml(version.name)}</option>`
+      )).join('');
+    }
+
+    function aiModelOptions(model) {
+      const known = AI_MODEL_OPTIONS.some((option) => option.value === model);
+      return AI_MODEL_OPTIONS.map((option) => (
+        `<option value="${escapeHtml(option.value)}" ${(known ? model === option.value : option.value === '__custom__') ? 'selected' : ''}>${escapeHtml(option.text)}</option>`
       )).join('');
     }
 
@@ -106,7 +113,7 @@
         #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar label { flex: 1 1 220px; margin: 0; }
         #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar button { min-height: 34px; padding: 6px 9px; font-size: 12px; }
         #${SETTINGS_VIEW_ID} label { display: block; margin: 12px 0; } #${SETTINGS_VIEW_ID} label > span { display:block; margin-bottom: 5px; font-weight: 600; }
-        #${SETTINGS_VIEW_ID} input[type="text"], #${SETTINGS_VIEW_ID} textarea { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #dce8e2; border-radius: 9px; background: #fafcfb; font: inherit; }
+        #${SETTINGS_VIEW_ID} input[type="text"], #${SETTINGS_VIEW_ID} input[type="password"], #${SETTINGS_VIEW_ID} textarea { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #dce8e2; border-radius: 9px; background: #fafcfb; font: inherit; }
         #${SETTINGS_VIEW_ID} textarea { min-height: 72px; resize: vertical; }
         #${SETTINGS_VIEW_ID} .boss-auto-status-options { display: flex; flex-wrap: wrap; gap: 8px 14px; }
         #${SETTINGS_VIEW_ID} .boss-auto-status-options label { margin: 0; font-weight: 400; }
@@ -143,6 +150,15 @@
           <div class="boss-auto-status-options"><label><input type="radio" name="onlineStatusMode" value="不限" ${config.onlineStatusMode === '不限' ? 'checked' : ''}> 不限</label><span class="boss-auto-status-checkboxes"></span></div>
           <small class="boss-auto-status-capability">${onlineStatusFieldAvailable === false ? '当前页面不支持在线状态筛选' : '在线状态将在职位详情加载后确认'}</small>
           <label><span>未知状态</span><select name="unknownOnlineStatusPolicy"><option value="skip">跳过职位</option><option value="keep">允许继续</option></select></label>
+          <h3>AI 职位判别</h3>
+          <label><span><input type="checkbox" name="aiEnabled" ${config.aiEnabled ? 'checked' : ''}> 启用 AI 判别</span></label>
+          <small>打开职位详情后，系统会把已读取的岗位信息和下方提示词发送给 AI，作为是否点击“立即沟通”的判断因素。</small>
+          <label><span>AI 接口地址</span><input type="text" name="aiEndpoint" value="${escapeHtml(config.aiEndpoint)}" placeholder="例如：https://api.openai.com/v1/chat/completions"></label>
+          <label><span>模型选择</span><select name="aiModel">${aiModelOptions(config.aiModel)}</select></label>
+          <label class="boss-auto-custom-model-field" style="${AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? 'display:none;' : ''}"><span>自定义模型名称</span><input type="text" name="aiCustomModel" value="${escapeHtml(AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? '' : config.aiModel)}" placeholder="例如：gpt-4o-mini"></label>
+          <label><span>API Key</span><input type="password" name="aiApiKey" value="${escapeHtml(config.aiApiKey)}" placeholder="仅保存在当前浏览器"></label>
+          <label><span>判断提示词</span><textarea name="aiPrompt" placeholder="请根据岗位信息判断是否适合我，并只返回 JSON：{&quot;pass&quot;:true,&quot;score&quot;:0-100,&quot;reason&quot;:&quot;...&quot;}">${escapeHtml(config.aiPrompt)}</textarea></label>
+          <label><span>AI 调用失败时</span><select name="aiFailurePolicy"><option value="skip" ${config.aiFailurePolicy === 'skip' ? 'selected' : ''}>跳过职位</option><option value="keep" ${config.aiFailurePolicy === 'keep' ? 'selected' : ''}>允许继续</option></select></label>
           <h3>多轮聊天消息</h3>
           <small>按保存顺序发送；单张图片不超过 1MB。</small>
           <div class="boss-auto-message-list"></div>
@@ -169,6 +185,11 @@
         if (switchVersion(selector.value)) recreateVersionView();
         else selector.value = previous;
       });
+      view.querySelector('[name="aiModel"]').addEventListener('change', (event) => {
+        const custom = event.currentTarget.value === '__custom__';
+        view.querySelector('.boss-auto-custom-model-field').style.display = custom ? '' : 'none';
+        markSettingsDirty();
+      });
       view.querySelector('.boss-auto-new-version').addEventListener('click', () => {
         if (isConfigSwitchLocked()) { setStatus('自动任务运行中，暂时不能切换配置版本', 'error'); return; }
         const name = window.prompt('请输入配置版本名称', `配置 ${loadConfigStore().versions.length + 1}`)?.trim();
@@ -180,6 +201,7 @@
         storeNow.activeVersionId = id;
         saveConfigStore(storeNow);
         window.dispatchEvent(new Event('boss-auto-config-changed'));
+        setStatus(`已新建配置版本：${name}`, 'success');
         recreateVersionView();
       });
       view.querySelector('.boss-auto-copy-version').addEventListener('click', () => {
@@ -193,6 +215,7 @@
         storeNow.activeVersionId = id;
         saveConfigStore(storeNow);
         window.dispatchEvent(new Event('boss-auto-config-changed'));
+        setStatus(`已复制配置版本：${name}`, 'success');
         recreateVersionView();
       });
       view.querySelector('.boss-auto-rename-version').addEventListener('click', () => {
@@ -205,6 +228,7 @@
         if (target) target.name = name;
         saveConfigStore(storeNow);
         window.dispatchEvent(new Event('boss-auto-config-changed'));
+        setStatus(`已重命名配置版本：${name}`, 'success');
         recreateVersionView();
       });
       view.querySelector('.boss-auto-delete-version').addEventListener('click', () => {
@@ -217,6 +241,7 @@
         storeNow.activeVersionId = storeNow.versions[0].id;
         saveConfigStore(storeNow);
         window.dispatchEvent(new Event('boss-auto-config-changed'));
+        setStatus(`已删除配置版本：${current.versionName}`, 'success');
         recreateVersionView();
       });
       const markSettingsDirty = () => { settingsViewDirty = true; };
@@ -291,7 +316,7 @@
         if (item.checked) view.querySelector('[name="onlineStatusMode"]').checked = false;
         markSettingsDirty();
       }));
-      view.querySelectorAll('input[type="text"], select:not(.boss-auto-version-select), textarea').forEach((input) => input.addEventListener('change', markSettingsDirty));
+      view.querySelectorAll('input[type="text"], input[type="password"], input[type="checkbox"], select:not(.boss-auto-version-select), textarea').forEach((input) => input.addEventListener('change', markSettingsDirty));
       view.querySelector('.boss-auto-save-settings').addEventListener('click', () => {
         const unlimited = view.querySelector('[name="onlineStatusMode"]').checked;
         const selected = [...view.querySelectorAll('[name="selectedOnlineStatuses"]:checked')].map((item) => item.value);
@@ -299,6 +324,17 @@
         if (!unlimited && onlineStatusFieldAvailable === false) { setStatus('当前页面没有在线状态字段，只能选择“不限”', 'error'); return; }
         const invalidMessage = messages.find((message) => !message.content || (message.type === 'text' && !message.content.trim()));
         if (invalidMessage) { setStatus('请补全所有文字消息或图片消息', 'error'); return; }
+        const selectedAiModel = view.querySelector('[name="aiModel"]').value === '__custom__'
+          ? view.querySelector('[name="aiCustomModel"]').value.trim()
+          : view.querySelector('[name="aiModel"]').value;
+        if (view.querySelector('[name="aiEnabled"]').checked) {
+          const missingAiField = [
+            ['aiEndpoint', 'AI 接口地址'], ['aiApiKey', 'API Key'],
+            ['aiPrompt', '判断提示词'],
+          ].find(([name]) => !view.querySelector(`[name="${name}"]`).value.trim());
+          if (!selectedAiModel) { setStatus('启用 AI 判别后请填写模型名称', 'error'); return; }
+          if (missingAiField) { setStatus(`启用 AI 判别后请填写${missingAiField[1]}`, 'error'); return; }
+        }
         const next = {
           ...loadConfig(),
           schemaVersion: 2,
@@ -308,6 +344,12 @@
           onlineStatusMode: unlimited ? '不限' : '状态筛选',
           selectedOnlineStatuses: unlimited ? [] : selected,
           unknownOnlineStatusPolicy: view.querySelector('[name="unknownOnlineStatusPolicy"]').value,
+          aiEnabled: view.querySelector('[name="aiEnabled"]').checked,
+          aiEndpoint: view.querySelector('[name="aiEndpoint"]').value.trim(),
+          aiModel: selectedAiModel,
+          aiApiKey: view.querySelector('[name="aiApiKey"]').value.trim(),
+          aiPrompt: view.querySelector('[name="aiPrompt"]').value.trim(),
+          aiFailurePolicy: view.querySelector('[name="aiFailurePolicy"]').value,
           messageSequence: messages,
           messageInterval: { min: MESSAGE_INTERVAL_MS, max: MESSAGE_INTERVAL_MS },
         };

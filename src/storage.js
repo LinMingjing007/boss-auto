@@ -16,6 +16,12 @@
       onlineStatusMode: overrides.onlineStatusMode || '不限',
       selectedOnlineStatuses: Array.isArray(overrides.selectedOnlineStatuses) ? overrides.selectedOnlineStatuses : [],
       unknownOnlineStatusPolicy: overrides.unknownOnlineStatusPolicy || 'skip',
+      aiEnabled: Boolean(overrides.aiEnabled),
+      aiEndpoint: overrides.aiEndpoint || 'https://api.deepseek.com/chat/completions',
+      aiModel: overrides.aiModel || 'deepseek-v4-flash',
+      aiApiKey: overrides.aiApiKey || '',
+      aiPrompt: overrides.aiPrompt || '',
+      aiFailurePolicy: overrides.aiFailurePolicy || 'skip',
       messageInterval: { min: MESSAGE_INTERVAL_MS, max: MESSAGE_INTERVAL_MS },
       messageSequence: Array.isArray(overrides.messageSequence)
         ? overrides.messageSequence

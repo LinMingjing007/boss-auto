@@ -3,7 +3,9 @@
 
   const {
     TARGET_PATH, SCRIPT_VERSION, CHAT_PANEL_ID, PANEL_ID, STATUS_ID,
-    STYLE_ID, SETTINGS_VIEW_ID, MESSAGE_INTERVAL_MS, STATUS_OPTIONS,
+    STYLE_ID, SETTINGS_VIEW_ID, MESSAGE_INTERVAL_MS, STATUS_OPTIONS, AI_MODEL_OPTIONS,
+    LOG_PANEL_ID,
+    AI_REQUEST_TIMEOUT_MS,
   } = window.BossAutoConstants;
   const { splitTerms } = window.BossAutoStorage;
   let lastUrl = location.href;
@@ -32,16 +34,18 @@
 
   function setStatus(message, type = 'info') {
     const status = document.getElementById(STATUS_ID);
+    window.BossAutoLogInstance?.add(message, type);
     if (!status) return;
 
     status.textContent = message;
     status.dataset.type = type;
   }
   window.BossAutoSetStatus = setStatus;
+  window.BossAutoLogInstance = window.BossAutoLog({ LOG_PANEL_ID, escapeHtml });
 
 
   const settings = window.BossAutoSettings({
-    PANEL_ID, SETTINGS_VIEW_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS,
+    PANEL_ID, SETTINGS_VIEW_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS, AI_MODEL_OPTIONS,
     loadConfig: window.BossAutoStorage.loadConfig,
     saveConfig: window.BossAutoStorage.saveConfig,
     loadConfigStore: window.BossAutoStorage.loadConfigStore,
@@ -74,6 +78,7 @@
   const { createChatPanel, stopChatMonitor } = chat;
   const jobs = window.BossAutoJobs({
     setStatus, getConfig, loadConfig: window.BossAutoStorage.loadConfig,
+    AI_REQUEST_TIMEOUT_MS,
     isJobAllowed, isJobsPage, STATUS_OPTIONS,
     randomDelay: window.BossAutoStorage.randomDelay,
     updateOnlineStatusCapability,
@@ -371,6 +376,9 @@
       document.getElementById(CHAT_PANEL_ID)?.remove();
       document.getElementById(`${CHAT_PANEL_ID}-style`)?.remove();
     }
+    if (!isJobsPage() && !isChatPage()) {
+      window.BossAutoLogInstance.removeLogPanel();
+    }
   }
 
   function handleUrlChange() {
@@ -382,11 +390,15 @@
 
     if (isJobsPage()) {
       createStatusPanel();
+      window.BossAutoLogInstance.createLogPanel('jobs');
+      window.BossAutoLogInstance.setPage('jobs');
       createSettingsPanel();
       setStatus('检测到职位列表页变化，准备触发…');
       runAutomation();
     } else if (isChatPage()) {
       createStatusPanel();
+      window.BossAutoLogInstance.createLogPanel('chat');
+      window.BossAutoLogInstance.setPage('chat');
       createChatPanel();
       setStatus('聊天页面已就绪，请点击“开始沟通”');
     }
@@ -404,6 +416,7 @@
       return;
     }
     createStatusPanel();
+    window.BossAutoLogInstance.createLogPanel(isJobsPage() ? 'jobs' : 'chat');
     if (isJobsPage()) {
       createSettingsPanel();
       runAutomation();
