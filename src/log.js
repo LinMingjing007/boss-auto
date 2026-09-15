@@ -60,6 +60,13 @@
         #${PANEL_ID}.boss-auto-unified-panel.compact, #${CHAT_PANEL_ID}.boss-auto-unified-panel.compact { display: block; }
         #${PANEL_ID}.boss-auto-unified-panel.compact > .boss-auto-panel-body { max-height: 360px; overflow: auto; }
         #${CHAT_PANEL_ID}.boss-auto-unified-panel.compact > #${LOG_PANEL_ID} { border-top: 1px solid #e4efe9; border-left: 0; }
+        #${PANEL_ID}.boss-auto-unified-panel.log-collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.log-collapsed { grid-template-columns: minmax(280px, 336px) 42px; width: 378px; }
+        #${LOG_PANEL_ID}.integrated.collapsed { display: block; width: 42px; min-width: 42px; height: 100%; overflow: hidden; }
+        #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-header { height: 100%; min-height: 180px; padding: 10px 5px; flex-direction: column; justify-content: flex-start; gap: 7px; }
+        #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-title { writing-mode: vertical-rl; font-size: 11px; }
+        #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-count { margin: 0; }
+        #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-clear { display: none; }
+        #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-collapse { margin-top: auto; }
         #${LOG_PANEL_ID}.integrated { position: relative; top: auto; right: auto; bottom: auto; left: auto; z-index: auto; width: auto; max-width: none; height: auto; min-height: 0; max-height: none; border: 0; border-left: 1px solid #e4efe9; border-radius: 0; box-shadow: none; }
         #${LOG_PANEL_ID}.integrated .boss-auto-log-list { min-height: 180px; height: 100%; }
         #${LOG_PANEL_ID} .boss-auto-log-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 14px; color:#164d43; background:#eef8f3; border-bottom:1px solid #e4efe9; cursor:grab; user-select:none; }
@@ -76,7 +83,7 @@
         #${LOG_PANEL_ID} .boss-auto-log-entry[data-type="error"] span { color:#c93636; }
         #${LOG_PANEL_ID}.collapsed { width:190px; height:auto; }
         #${LOG_PANEL_ID}.collapsed .boss-auto-log-list { display:none; }
-        @media (max-width: 900px) { #${PANEL_ID}.boss-auto-unified-panel, #${CHAT_PANEL_ID}.boss-auto-unified-panel { display: block; width: min(100vw - 24px, 420px); max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto; } #${LOG_PANEL_ID}.integrated { border-top: 1px solid #e4efe9; border-left: 0; } #${LOG_PANEL_ID}.integrated .boss-auto-log-list { height: 260px; } }
+        @media (max-width: 900px) { #${PANEL_ID}.boss-auto-unified-panel, #${CHAT_PANEL_ID}.boss-auto-unified-panel { display: block; width: min(100vw - 24px, 420px); max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto; } #${PANEL_ID}.boss-auto-unified-panel.log-collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.log-collapsed { width: min(100vw - 24px, 378px); } #${LOG_PANEL_ID}.integrated { border-top: 1px solid #e4efe9; border-left: 0; } #${LOG_PANEL_ID}.integrated .boss-auto-log-list { height: 260px; } #${LOG_PANEL_ID}.integrated.collapsed { width: 100%; height: 42px; min-width: 0; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-header { min-height: 42px; height: 42px; flex-direction: row; align-items: center; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-title { writing-mode: horizontal-tb; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-collapse { margin-top: 0; margin-left: auto; } }
       `;
       document.head.appendChild(style);
       panel = document.createElement('section');
@@ -99,6 +106,7 @@
       });
       panel.querySelector('.boss-auto-log-collapse').addEventListener('click', () => {
         const collapsed = panel.classList.toggle('collapsed');
+        panel.parentElement?.classList.toggle('log-collapsed', collapsed);
         panel.querySelector('.boss-auto-log-collapse').textContent = collapsed ? '+' : '−';
         panel.querySelector('.boss-auto-log-collapse').setAttribute('aria-expanded', String(!collapsed));
       });
@@ -128,7 +136,7 @@
       target.appendChild(panel);
       const updateLayout = () => {
         if (!target.isConnected) return;
-        target.classList.toggle('compact', target.getBoundingClientRect().width < 640);
+        target.classList.toggle('compact', !target.classList.contains('log-collapsed') && target.getBoundingClientRect().width < 640);
       };
       updateLayout();
       if (window.ResizeObserver) {
