@@ -109,8 +109,13 @@
       let dragging = false;
       let dragOffsetX = 0;
       let dragOffsetY = 0;
-      header.addEventListener('pointerdown', (event) => {
+      const startDragging = (event) => {
+        const target = event.target;
+        const interactive = target?.closest?.('button, input, textarea, select, a, label, .boss-auto-log-list');
         const rect = panel.getBoundingClientRect();
+        const inResizeHandle = event.clientX >= rect.right - 20 && event.clientY >= rect.bottom - 20;
+        if (interactive || inResizeHandle) return;
+
         dragging = true;
         dragOffsetX = event.clientX - rect.left;
         dragOffsetY = event.clientY - rect.top;
@@ -118,10 +123,11 @@
         panel.style.top = `${rect.top}px`;
         panel.style.right = 'auto';
         panel.style.bottom = 'auto';
-        header.setPointerCapture(event.pointerId);
+        panel.setPointerCapture(event.pointerId);
         header.classList.add('dragging');
-      });
-      header.addEventListener('pointermove', (event) => {
+      };
+      panel.addEventListener('pointerdown', startDragging);
+      panel.addEventListener('pointermove', (event) => {
         if (!dragging) return;
         const maxLeft = Math.max(0, window.innerWidth - panel.offsetWidth);
         const maxTop = Math.max(0, window.innerHeight - panel.offsetHeight);
@@ -132,8 +138,8 @@
         dragging = false;
         header.classList.remove('dragging');
       };
-      header.addEventListener('pointerup', stopDragging);
-      header.addEventListener('pointercancel', stopDragging);
+      panel.addEventListener('pointerup', stopDragging);
+      panel.addEventListener('pointercancel', stopDragging);
       const collapseButton = header.querySelector('.chat-collapse');
       collapseButton.addEventListener('pointerdown', (event) => event.stopPropagation());
       collapseButton.addEventListener('click', (event) => {

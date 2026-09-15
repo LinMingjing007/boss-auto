@@ -460,21 +460,25 @@
       let dragOffsetX = 0;
       let dragOffsetY = 0;
   
-      header.addEventListener('pointerdown', (event) => {
-        if (event.target.closest('button')) return;
-  
+      const startDragging = (event) => {
+        const target = event.target;
+        const interactive = target?.closest?.('button, input, textarea, select, a, label, .boss-auto-log-list');
         const rect = panel.getBoundingClientRect();
+        const inResizeHandle = event.clientX >= rect.right - 20 && event.clientY >= rect.bottom - 20;
+        if (interactive || inResizeHandle) return;
+
         dragging = true;
         dragOffsetX = event.clientX - rect.left;
         dragOffsetY = event.clientY - rect.top;
         panel.style.left = `${rect.left}px`;
         panel.style.top = `${rect.top}px`;
         panel.style.right = 'auto';
-        header.setPointerCapture(event.pointerId);
+        panel.setPointerCapture(event.pointerId);
         header.classList.add('dragging');
-      });
+      };
+      panel.addEventListener('pointerdown', startDragging);
   
-      header.addEventListener('pointermove', (event) => {
+      panel.addEventListener('pointermove', (event) => {
         if (!dragging) return;
   
         const maxLeft = Math.max(0, window.innerWidth - panel.offsetWidth);
@@ -487,8 +491,8 @@
         dragging = false;
         header.classList.remove('dragging');
       };
-      header.addEventListener('pointerup', stopDragging);
-      header.addEventListener('pointercancel', stopDragging);
+      panel.addEventListener('pointerup', stopDragging);
+      panel.addEventListener('pointercancel', stopDragging);
   
       panel.querySelector('.boss-auto-start').addEventListener('click', () => {
         const button = panel.querySelector('.boss-auto-start');
