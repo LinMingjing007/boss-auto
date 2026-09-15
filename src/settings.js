@@ -348,7 +348,7 @@
         </div>
         <div class="boss-auto-panel-body" id="boss-auto-fields">
           <div class="boss-auto-intro"><span>职位偏好</span><small>仅配置</small></div>
-          <p class="boss-auto-description">记下你的期待，让下一份工作更合心意。</p>
+          <p class="boss-auto-description">当前版本配置仅供查看；如需修改，请打开“设置”。</p>
           <label>
             <span>配置版本</span>
             <select class="boss-auto-version-select" style="display:block;width:100%;height:42px;padding:0 12px;border:1px solid #e1eae5;border-radius:10px;color:#243e34;background:#f8faf9;font:inherit;">
@@ -357,15 +357,15 @@
           </label>
           <label>
             <span>职位关键词</span>
-            <input name="keywords" value="${escapeHtml(config.keywords)}" placeholder="例如：前端-React-Node.js">
+            <input name="keywords" value="${escapeHtml(config.keywords)}" placeholder="例如：前端-React-Node.js" readonly aria-readonly="true">
           </label>
           <label>
             <span>工作地包含</span>
-            <input name="locations" value="${escapeHtml(config.locations)}" placeholder="例如：上海-杭州-远程">
+            <input name="locations" value="${escapeHtml(config.locations)}" placeholder="例如：上海-杭州-远程" readonly aria-readonly="true">
           </label>
           <label>
             <span>屏蔽词</span>
-            <input name="blockedWords" value="${escapeHtml(config.blockedWords)}" placeholder="例如：销售-客服-外包">
+            <input name="blockedWords" value="${escapeHtml(config.blockedWords)}" placeholder="例如：销售-客服-外包" readonly aria-readonly="true">
           </label>
           <div class="boss-auto-hint">多个条件用 <b>-</b> 分隔 · 留空表示不限</div>
           <button type="button" class="boss-auto-start">开始投递</button>
