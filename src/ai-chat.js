@@ -117,12 +117,29 @@
       }, null, 2);
     }
 
+    function getMessageText(message) {
+      if (message.displayContent) return String(message.displayContent);
+      if (Array.isArray(message.content)) {
+        return message.content.map((part) => {
+          if (part?.type === 'text') return part.text || '';
+          if (part?.type === 'image_url') return '[图片]';
+          return '';
+        }).filter(Boolean).join('\n');
+      }
+      return String(message.content || '');
+    }
+
     function renderMessages() {
       const list = panel?.querySelector('.boss-auto-ai-chat-list');
       if (!list) return;
-      list.innerHTML = messages.length ? messages.map((message) => (
-        `<div class="boss-auto-ai-chat-message ${message.role === 'user' ? 'is-user' : 'is-assistant'}">${escapeHtml(message.displayContent || message.content).replace(/\n/g, '<br>')}</div>`
-      )).join('') : '<div class="boss-auto-ai-chat-empty">输入问题，开始和 AI 对话</div>';
+      const openStates = [...list.querySelectorAll('.boss-auto-ai-chat-message')].map((message) => message.open);
+      list.innerHTML = messages.length ? messages.map((message, index) => {
+        const text = getMessageText(message);
+        const summary = text.replace(/\s+/g, ' ').trim().slice(0, 42) || '空消息';
+        const roleLabel = message.role === 'user' ? '我' : 'AI';
+        const open = openStates[index] === undefined || openStates[index];
+        return `<details class="boss-auto-ai-chat-message ${message.role === 'user' ? 'is-user' : 'is-assistant'}"${open ? ' open' : ''}><summary><span>${roleLabel}</span><em>${escapeHtml(summary)}</em></summary><div class="boss-auto-ai-chat-message-content">${escapeHtml(text).replace(/\n/g, '<br>')}</div></details>`;
+      }).join('') : '<div class="boss-auto-ai-chat-empty">输入问题，开始和 AI 对话</div>';
       list.scrollTop = list.scrollHeight;
     }
 
@@ -396,9 +413,16 @@
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-clear { padding:4px 7px; color:#426e62; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-list { flex:1; overflow:auto; display:flex; flex-direction:column; gap:8px; padding:12px; background:#fbfdfc; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-empty { margin:auto; color:#8b9b94; text-align:center; }
-        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message { max-width:88%; padding:8px 10px; border-radius:10px; word-break:break-word; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message { max-width:88%; border-radius:10px; word-break:break-word; overflow:hidden; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-user { align-self:flex-end; color:#fff; background:#187a64; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-assistant { align-self:flex-start; color:#29483d; background:#eef8f3; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message summary { display:flex; align-items:center; gap:8px; min-width:150px; padding:8px 10px; cursor:pointer; list-style:none; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message summary::-webkit-details-marker { display:none; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message summary::before { content:'›'; flex:0 0 auto; font-size:17px; line-height:12px; transform:rotate(0deg); transition:transform .15s ease; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message[open] summary::before { transform:rotate(90deg); }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message summary span { flex:0 0 auto; font-weight:700; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message summary em { min-width:0; overflow:hidden; color:inherit; opacity:.78; font-size:10px; font-style:normal; text-overflow:ellipsis; white-space:nowrap; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content { padding:0 10px 9px; line-height:1.5; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-footer { display:grid; grid-template-columns:minmax(0,1fr) 54px; gap:7px; padding:10px; border-top:1px solid #e4efe9; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-storage-hint { grid-column:1 / -1; color:#8b9b94; font-size:10px; line-height:1.3; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-attachment-preview { grid-column:1 / -1; display:flex; align-items:center; gap:7px; padding:5px 7px; color:#426e62; background:#f6f9f7; border:1px solid #dcece7; border-radius:7px; font-size:10px; }
