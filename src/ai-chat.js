@@ -11,6 +11,7 @@
     let messages = [];
     let busy = false;
     let pendingAttachment = null;
+    let pendingAskUser = null;
     function addLog(message, type = 'info') {
       window.BossAutoLogInstance?.add(message, type);
     }
@@ -55,6 +56,24 @@
           type: 'object',
           properties: {},
           required: [],
+          additionalProperties: false,
+        },
+      },
+    };
+    const askUserTool = {
+      type: 'function',
+      function: {
+        name: 'ask_user',
+        description: '向用户提出需要用户选择或补充的信息。用户点击选项后会自动继续对话；需要自定义内容时允许选择其他并输入。',
+        strict: true,
+        parameters: {
+          type: 'object',
+          properties: {
+            question: { type: 'string' },
+            options: { type: 'array', items: { type: 'string' }, minItems: 1 },
+            allowOther: { type: 'boolean' },
+          },
+          required: ['question', 'options', 'allowOther'],
           additionalProperties: false,
         },
       },
@@ -179,6 +198,49 @@
       return html;
     }
 
+    function parseAskUser(argumentsText) {
+      let request;
+      try {
+        request = JSON.parse(argumentsText || '{}');
+      } catch {
+        throw new Error('AI ask_user 参数不是有效 JSON');
+      }
+      if (!request.question || !Array.isArray(request.options) || !request.options.length) {
+        throw new Error('AI ask_user 缺少问题或选项');
+      }
+      return {
+        question: String(request.question),
+        options: request.options.map((option) => String(option)).filter(Boolean),
+        allowOther: request.allowOther === true,
+      };
+    }
+
+    function finishAskUser(answer) {
+      if (!pendingAskUser || !String(answer || '').trim()) return;
+      const { resolve } = pendingAskUser;
+      pendingAskUser = null;
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (messages[index].askUser) {
+          delete messages[index].askUser;
+          break;
+        }
+      }
+      messages.push({ role: 'user', content: String(answer).trim(), displayContent: String(answer).trim() });
+      renderMessages();
+      addLog(`用户回答 AI：${String(answer).trim().slice(0, 80)}`);
+      resolve(String(answer).trim());
+    }
+
+    function requestUserAnswer(argumentsText) {
+      const request = parseAskUser(argumentsText);
+      messages.push({ role: 'assistant', content: request.question, displayContent: request.question, askUser: request });
+      renderMessages();
+      addLog(`AI 正在询问用户：${request.question.slice(0, 80)}`);
+      return new Promise((resolve) => {
+        pendingAskUser = { resolve };
+      });
+    }
+
     function renderMessages() {
       const list = panel?.querySelector('.boss-auto-ai-chat-list');
       if (!list) return;
@@ -191,8 +253,23 @@
         const renderedText = message.role === 'user'
           ? escapeHtml(text).replace(/\n/g, '<br>')
           : renderMarkdown(text);
-        return `<details class="boss-auto-ai-chat-message ${message.role === 'user' ? 'is-user' : 'is-assistant'}"${open ? ' open' : ''}><summary><span>${roleLabel}</span><em>${escapeHtml(summary)}</em></summary><div class="boss-auto-ai-chat-message-content">${renderedText}</div></details>`;
+        const askMarkup = message.askUser ? `<div class="boss-auto-ai-chat-ask-options">${message.askUser.options.map((option) => `<button type="button" class="boss-auto-ai-chat-ask-option">${escapeHtml(option)}</button>`).join('')}${message.askUser.allowOther ? '<div class="boss-auto-ai-chat-ask-other"><input type="text" placeholder="输入其他内容"><button type="button" class="boss-auto-ai-chat-ask-other-submit">发送</button></div>' : ''}</div>` : '';
+        return `<details class="boss-auto-ai-chat-message ${message.role === 'user' ? 'is-user' : 'is-assistant'}"${open ? ' open' : ''}><summary><span>${roleLabel}</span><em>${escapeHtml(summary)}</em></summary><div class="boss-auto-ai-chat-message-content">${renderedText}${askMarkup}</div></details>`;
       }).join('') : '<div class="boss-auto-ai-chat-empty">输入问题，开始和 AI 对话</div>';
+      list.querySelectorAll('.boss-auto-ai-chat-ask-option').forEach((button) => {
+        button.addEventListener('click', () => finishAskUser(button.textContent));
+      });
+      const otherInput = list.querySelector('.boss-auto-ai-chat-ask-other input');
+      const otherSubmit = list.querySelector('.boss-auto-ai-chat-ask-other-submit');
+      if (otherInput && otherSubmit) {
+        otherSubmit.addEventListener('click', () => finishAskUser(otherInput.value));
+        otherInput.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            finishAskUser(otherInput.value);
+          }
+        });
+      }
       list.scrollTop = list.scrollHeight;
     }
 
@@ -348,7 +425,7 @@
               temperature: 0.2,
               max_tokens: 1024,
               thinking: { type: 'disabled' },
-              tools: [readConfigTool, updateConfigTool],
+              tools: [readConfigTool, updateConfigTool, askUserTool],
               tool_choice: 'auto',
               messages: conversation,
             }),
@@ -370,18 +447,20 @@
             content: responseMessage.content || null,
             tool_calls: toolCalls,
           });
-          toolCalls.forEach((toolCall) => {
+          for (const toolCall of toolCalls) {
             let result;
             if (toolCall?.function?.name === 'update_user_config') {
               result = updateUserConfig(toolCall.function.arguments);
             } else if (toolCall?.function?.name === 'read_user_config') {
               result = `当前配置：\n${readUserConfig()}`;
+            } else if (toolCall?.function?.name === 'ask_user') {
+              result = await requestUserAnswer(toolCall.function.arguments);
             } else {
               throw new Error('AI 返回了不支持的工具');
             }
-            addLog(toolCall.function.name === 'read_user_config' ? 'AI 读取了当前配置' : result, 'success');
+            addLog(toolCall.function.name === 'read_user_config' ? 'AI 读取了当前配置' : toolCall.function.name === 'ask_user' ? 'AI 已收到用户选择' : result, 'success');
             conversation.push({ role: 'tool', tool_call_id: toolCall.id, content: result });
-          });
+          }
         }
         renderMessages();
         addLog('AI 对话回复成功', 'success');
@@ -484,6 +563,11 @@
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content pre { margin:6px 0; padding:8px; overflow:auto; border-radius:6px; background:rgba(0,0,0,.1); }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content pre code { padding:0; background:transparent; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content a { color:inherit; text-decoration:underline; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-options { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-option, #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-other-submit { width:auto; min-height:28px; padding:4px 9px; color:#187a64; background:#fff; border:1px solid #b9ded0; border-radius:7px; cursor:pointer; font:inherit; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-option:hover, #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-other-submit:hover { background:#eaf8f1; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-other { display:flex; flex:1 1 100%; gap:6px; margin-top:2px; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-other input { min-width:0; flex:1; padding:5px 7px; color:#243e34; background:#fff; border:1px solid #d5e5dd; border-radius:6px; outline:none; font:inherit; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-footer { display:grid; grid-template-columns:minmax(0,1fr) 54px; gap:7px; padding:10px; border-top:1px solid #e4efe9; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-storage-hint { grid-column:1 / -1; color:#8b9b94; font-size:10px; line-height:1.3; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-attachment-preview { grid-column:1 / -1; display:flex; align-items:center; gap:7px; padding:5px 7px; color:#426e62; background:#f6f9f7; border:1px solid #dcece7; border-radius:7px; font-size:10px; }
