@@ -16,6 +16,7 @@
 
     const nullableString = { type: ['string', 'null'] };
     const nullableBoolean = { type: ['boolean', 'null'] };
+    const onlineStatusValues = ['在线', '刚刚活跃', '今日活跃', '3日内活跃', '本周活跃', '本月活跃', '半年前活跃'];
     const updateConfigTool = {
       type: 'function',
       function: {
@@ -33,11 +34,12 @@
             aiEnabled: nullableBoolean,
             aiFailurePolicy: { type: ['string', 'null'], enum: ['skip', 'keep', null] },
             onlineStatusMode: { type: ['string', 'null'], enum: ['不限', '状态筛选', null] },
+            unknownOnlineStatusPolicy: { type: ['string', 'null'], enum: ['skip', 'keep', null] },
             selectedOnlineStatuses: {
-              type: ['array', 'null'], items: { type: 'string' },
+              type: ['array', 'null'], items: { type: 'string', enum: onlineStatusValues },
             },
           },
-          required: ['keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt', 'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'selectedOnlineStatuses'],
+          required: ['keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt', 'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'unknownOnlineStatusPolicy', 'selectedOnlineStatuses'],
           additionalProperties: false,
         },
       },
@@ -68,7 +70,7 @@
       const next = { ...current };
       const editableFields = [
         'keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt',
-        'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'selectedOnlineStatuses',
+        'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'unknownOnlineStatusPolicy', 'selectedOnlineStatuses',
       ];
       editableFields.forEach((field) => {
         if (changes[field] !== null && changes[field] !== undefined) next[field] = changes[field];
@@ -76,6 +78,10 @@
       if (next.onlineStatusMode === '不限') next.selectedOnlineStatuses = [];
       if (next.onlineStatusMode === '状态筛选' && !Array.isArray(next.selectedOnlineStatuses)) {
         next.selectedOnlineStatuses = [];
+      }
+      if (Array.isArray(next.selectedOnlineStatuses)
+        && next.selectedOnlineStatuses.some((status) => !onlineStatusValues.includes(status))) {
+        throw new Error('在线状态包含不支持的选项');
       }
       saveConfig(next);
       window.dispatchEvent(new Event('boss-auto-config-changed'));
@@ -166,6 +172,11 @@
         addLog('AI 对话失败：AI 配置不完整', 'error');
         return;
       }
+      if (!/deepseek/i.test(config.aiModel)) {
+        setStatus('当前仅支持 DeepSeek 模型', 'error');
+        addLog('AI 对话失败：当前仅支持 DeepSeek 模型', 'error');
+        return;
+      }
 
       messages.push({ role: 'user', content });
       input.value = '';
@@ -185,7 +196,6 @@
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
       try {
-        const isDeepSeek = /deepseek/i.test(`${config.aiEndpoint} ${config.aiModel}`);
         const response = await fetch(config.aiEndpoint, {
           method: 'POST',
           headers: {
@@ -196,7 +206,7 @@
             model: config.aiModel,
             temperature: 0.2,
             max_tokens: 1024,
-            ...(isDeepSeek ? { thinking: { type: 'disabled' } } : {}),
+            thinking: { type: 'disabled' },
             tools: [readConfigTool, updateConfigTool],
             tool_choice: 'auto',
             messages: [

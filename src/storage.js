@@ -5,9 +5,10 @@
   const imageSelectionTokens = new WeakMap();
 
   function createDefaultAiConnection(overrides = {}) {
+    const configuredModel = overrides.aiModel || '';
     return {
       aiEndpoint: overrides.aiEndpoint || 'https://api.deepseek.com/chat/completions',
-      aiModel: overrides.aiModel || 'deepseek-v4-flash',
+      aiModel: /deepseek/i.test(configuredModel) ? configuredModel : 'deepseek-v4-flash',
       aiApiKey: overrides.aiApiKey || '',
     };
   }

@@ -304,12 +304,17 @@
         try { result = JSON.parse(match[0]); } catch { throw new Error('AI 返回的 JSON 无法解析'); }
       }
       if (typeof result.pass !== 'boolean') throw new Error('AI 返回结果缺少 pass 布尔值');
-      const score = Number(result.score);
+      if (typeof result.score !== 'number' || !Number.isFinite(result.score)
+        || result.score < 0 || result.score > 100) {
+        throw new Error('AI 返回结果的 score 必须是 0 到 100 的数字');
+      }
+      if (typeof result.reason !== 'string') throw new Error('AI 返回结果缺少 reason 字符串');
+      if (typeof result.risks !== 'string') throw new Error('AI 返回结果缺少 risks 字符串');
       return {
         pass: result.pass,
-        score: Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : null,
-        reason: String(result.reason || result.reasons || '').trim(),
-        risks: String(result.risks || '').trim(),
+        score: result.score,
+        reason: result.reason.trim(),
+        risks: result.risks.trim(),
       };
     }
 
@@ -317,6 +322,7 @@
       if (!config.aiEndpoint || !config.aiModel || !config.aiApiKey || !config.aiPrompt) {
         throw new Error('AI 配置不完整');
       }
+      if (!/deepseek/i.test(config.aiModel)) throw new Error('当前仅支持 DeepSeek 模型');
       const detail = document.querySelector('.job-detail-container');
       if (!detail) throw new Error('未找到职位详情');
       const detailText = (detail.innerText || detail.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 16000);
@@ -332,7 +338,6 @@
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
       try {
-        const isDeepSeek = /deepseek/i.test(`${config.aiEndpoint} ${config.aiModel}`);
         const decisionSchema = {
           type: 'object',
           properties: {
@@ -354,19 +359,17 @@
             model: config.aiModel,
             temperature: 0,
             max_tokens: 256,
-            ...(isDeepSeek ? {
-              thinking: { type: 'disabled' },
-              tools: [{
-                type: 'function',
-                function: {
-                  name: 'job_match_decision',
-                  description: '输出岗位匹配判断结果',
-                  strict: true,
-                  parameters: decisionSchema,
-                },
-              }],
-              tool_choice: { type: 'function', function: { name: 'job_match_decision' } },
-            } : { response_format: { type: 'json_object' } }),
+            thinking: { type: 'disabled' },
+            tools: [{
+              type: 'function',
+              function: {
+                name: 'job_match_decision',
+                description: '输出岗位匹配判断结果',
+                strict: true,
+                parameters: decisionSchema,
+              },
+            }],
+            tool_choice: { type: 'function', function: { name: 'job_match_decision' } },
             messages: [
               { role: 'system', content: [config.resumePrompt, config.aiPrompt].filter(Boolean).join('\n\n') },
               { role: 'user', content: `请判断以下职位信息：\n${JSON.stringify(knownInfo, null, 2)}` },

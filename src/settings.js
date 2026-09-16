@@ -43,8 +43,9 @@
 
     function aiModelOptions(model) {
       const known = AI_MODEL_OPTIONS.some((option) => option.value === model);
+      const selectedModel = known ? model : AI_MODEL_OPTIONS[0].value;
       return AI_MODEL_OPTIONS.map((option) => (
-        `<option value="${escapeHtml(option.value)}" ${(known ? model === option.value : option.value === '__custom__') ? 'selected' : ''}>${escapeHtml(option.text)}</option>`
+        `<option value="${escapeHtml(option.value)}" ${selectedModel === option.value ? 'selected' : ''}>${escapeHtml(option.text)}</option>`
       )).join('');
     }
 
@@ -155,10 +156,9 @@
           <div class="boss-auto-settings-section boss-auto-global-ai-section">
             <h3>AI 接入配置（全局共用）</h3>
             <span class="boss-auto-section-hint">接口地址、模型和 API Key 不属于配置版本；切换配置版本时保持不变。</span>
-            <label><span>AI 接口地址</span><input type="text" name="aiEndpoint" value="${escapeHtml(config.aiEndpoint)}" placeholder="例如：https://api.openai.com/v1/chat/completions"></label>
+            <label><span>AI 接口地址</span><input type="text" name="aiEndpoint" value="${escapeHtml(config.aiEndpoint)}" placeholder="例如：https://api.deepseek.com/chat/completions"></label>
             <label><span>模型选择</span><select name="aiModel">${aiModelOptions(config.aiModel)}</select></label>
-            <label class="boss-auto-custom-model-field" style="${AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? 'display:none;' : ''}"><span>自定义模型名称</span><input type="text" name="aiCustomModel" value="${escapeHtml(AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? '' : config.aiModel)}" placeholder="例如：gpt-4o-mini"></label>
-            <label><span>API Key</span><input type="password" name="aiApiKey" value="${escapeHtml(config.aiApiKey)}" placeholder="仅保存在当前浏览器"></label>
+              <label><span>API Key</span><input type="password" name="aiApiKey" value="${escapeHtml(config.aiApiKey)}" placeholder="仅保存在当前浏览器"></label>
           </div>
           <div class="boss-auto-settings-section">
             <h3>职位筛选</h3>
@@ -216,8 +216,6 @@
         else selector.value = previous;
       });
       view.querySelector('[name="aiModel"]').addEventListener('change', (event) => {
-        const custom = event.currentTarget.value === '__custom__';
-        view.querySelector('.boss-auto-custom-model-field').style.display = custom ? '' : 'none';
         markSettingsDirty();
       });
       view.querySelector('.boss-auto-new-version').addEventListener('click', () => {
@@ -362,9 +360,7 @@
         if (!unlimited && onlineStatusFieldAvailable === false) { setStatus('当前页面没有在线状态字段，只能选择“不限”', 'error'); return; }
         const invalidMessage = messages.find((message) => !message.content || (message.type === 'text' && !message.content.trim()));
         if (invalidMessage) { setStatus('请补全所有文字消息或图片消息', 'error'); return; }
-        const selectedAiModel = view.querySelector('[name="aiModel"]').value === '__custom__'
-          ? view.querySelector('[name="aiCustomModel"]').value.trim()
-          : view.querySelector('[name="aiModel"]').value;
+        const selectedAiModel = view.querySelector('[name="aiModel"]').value;
         if (view.querySelector('[name="aiEnabled"]').checked) {
           const missingAiField = [
             ['aiEndpoint', 'AI 接口地址'], ['aiApiKey', 'API Key'],
