@@ -111,7 +111,7 @@
       let dragOffsetY = 0;
       const startDragging = (event) => {
         const target = event.target;
-        const interactive = target?.closest?.('button, input, textarea, select, a, label, .boss-auto-log-list');
+        const interactive = target?.closest?.('button, input, textarea, select, a, label, .boss-auto-log-list, .boss-auto-ai-chat-list');
         const rect = panel.getBoundingClientRect();
         const inResizeHandle = event.clientX >= rect.right - 20 && event.clientY >= rect.bottom - 20;
         if (interactive || inResizeHandle) return;

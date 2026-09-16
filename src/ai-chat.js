@@ -25,6 +25,11 @@
 
     function positionPanel() {
       if (!panel) return;
+      if (panel.classList.contains('integrated')) {
+        panel.style.top = '';
+        panel.style.left = '';
+        return;
+      }
       const target = targetId && document.getElementById(targetId);
       const panelWidth = panel.getBoundingClientRect().width || 320;
       if (target) {
@@ -41,6 +46,16 @@
       messages = [];
       renderMessages();
       addLog('已清空 AI 对话');
+    }
+
+    function toggleCollapsed() {
+      const collapsed = panel.classList.toggle('collapsed');
+      const button = panel.querySelector('.boss-auto-ai-chat-collapse');
+      button.textContent = collapsed ? '+' : '−';
+      button.title = collapsed ? '展开 AI 对话' : '收起 AI 对话';
+      button.setAttribute('aria-label', collapsed ? '展开 AI 对话' : '收起 AI 对话');
+      button.setAttribute('aria-expanded', String(!collapsed));
+      panel.parentElement?.classList.toggle('ai-collapsed', collapsed);
     }
 
     async function sendMessage() {
@@ -122,6 +137,7 @@
       let offsetY = 0;
       const header = panel.querySelector('.boss-auto-ai-chat-header');
       const start = (event) => {
+        if (panel.classList.contains('integrated')) return;
         const target = event.target;
         const interactive = target?.closest?.('button, input, textarea, select, a, label, .boss-auto-ai-chat-list');
         const rect = panel.getBoundingClientRect();
@@ -155,6 +171,7 @@
     function createAiChatPanel(nextTargetId) {
       targetId = nextTargetId;
       if (panel?.isConnected) {
+        attachTo(nextTargetId);
         positionPanel();
         return;
       }
@@ -162,10 +179,18 @@
       style.id = `${AI_CHAT_PANEL_ID}-style`;
       style.textContent = `
         #${AI_CHAT_PANEL_ID} { position:fixed; top:84px; left:12px; z-index:2147483645; display:flex; flex-direction:column; width:320px; height:430px; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px); min-width:260px; min-height:260px; resize:both; overflow:hidden; padding:0; color:#203e3b; background:#fff; border:1px solid #dcece7; border-radius:16px; box-shadow:0 12px 40px rgba(19,68,57,.18); font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+        #${AI_CHAT_PANEL_ID}.integrated { position:relative; top:auto; left:auto; z-index:auto; width:auto; height:auto; min-width:0; min-height:0; max-width:none; max-height:none; resize:none; border:0; border-radius:0; box-shadow:none; }
+        #${AI_CHAT_PANEL_ID}.integrated.collapsed { width:42px; min-width:42px; height:100%; }
+        #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-list, #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-footer { display:none; }
+        #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-clear { display:none; }
+        #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-header { height:100%; min-height:180px; padding:10px 5px; flex-direction:column; gap:7px; justify-content:flex-start; }
+        #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-title { writing-mode:vertical-rl; font-size:11px; }
+        #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-collapse { margin-top:auto; }
         #${AI_CHAT_PANEL_ID} * { box-sizing:border-box; }
-        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-header { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; color:#164d43; background:linear-gradient(120deg,#e5f7ef,#f4faf7); border-bottom:1px solid #e4efe9; cursor:grab; user-select:none; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 14px; color:#164d43; background:linear-gradient(120deg,#e5f7ef,#f4faf7); border-bottom:1px solid #e4efe9; cursor:grab; user-select:none; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-header.dragging { cursor:grabbing; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-title { font-weight:700; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-header > div { display:flex; gap:5px; }
         #${AI_CHAT_PANEL_ID} button { border:1px solid #d5e5dd; border-radius:7px; cursor:pointer; font:inherit; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-clear { padding:4px 7px; color:#426e62; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-list { flex:1; overflow:auto; display:flex; flex-direction:column; gap:8px; padding:12px; background:#fbfdfc; }
@@ -185,12 +210,17 @@
       panel.id = AI_CHAT_PANEL_ID;
       panel.setAttribute('aria-label', 'AI 对话');
       panel.innerHTML = `
-        <div class="boss-auto-ai-chat-header"><span class="boss-auto-ai-chat-title">AI 对话</span><button type="button" class="boss-auto-ai-chat-clear">清空</button></div>
+        <div class="boss-auto-ai-chat-header"><span class="boss-auto-ai-chat-title">AI 对话</span><div><button type="button" class="boss-auto-ai-chat-clear">清空</button><button type="button" class="boss-auto-ai-chat-collapse" title="收起 AI 对话" aria-label="收起 AI 对话" aria-expanded="true">−</button></div></div>
         <div class="boss-auto-ai-chat-list"><div class="boss-auto-ai-chat-empty">输入问题，开始和 AI 对话</div></div>
         <div class="boss-auto-ai-chat-footer"><textarea class="boss-auto-ai-chat-input" rows="2" placeholder="输入消息，Enter 发送"></textarea><button type="button" class="boss-auto-ai-chat-send">发送</button></div>
       `;
       document.body.appendChild(panel);
       panel.querySelector('.boss-auto-ai-chat-clear').addEventListener('click', clearConversation);
+      panel.querySelector('.boss-auto-ai-chat-collapse').addEventListener('pointerdown', (event) => event.stopPropagation());
+      panel.querySelector('.boss-auto-ai-chat-collapse').addEventListener('click', (event) => {
+        event.stopPropagation();
+        toggleCollapsed();
+      });
       panel.querySelector('.boss-auto-ai-chat-send').addEventListener('click', sendMessage);
       panel.querySelector('.boss-auto-ai-chat-input').addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
@@ -199,7 +229,17 @@
         }
       });
       bindDragging();
+      attachTo(nextTargetId);
       positionPanel();
+    }
+
+    function attachTo(nextTargetId) {
+      targetId = nextTargetId;
+      const target = document.getElementById(targetId);
+      if (!panel || !target) return;
+      target.appendChild(panel);
+      panel.classList.add('integrated');
+      target.classList.toggle('ai-collapsed', panel.classList.contains('collapsed'));
     }
 
     function removeAiChatPanel() {
@@ -211,6 +251,6 @@
       busy = false;
     }
 
-    return { createAiChatPanel, removeAiChatPanel };
+    return { createAiChatPanel, removeAiChatPanel, attachTo };
   };
 })();

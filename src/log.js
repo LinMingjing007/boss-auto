@@ -2,7 +2,7 @@
   'use strict';
 
   window.BossAutoLog = function createLogModule(context) {
-    const { LOG_PANEL_ID, PANEL_ID, CHAT_PANEL_ID, escapeHtml } = context;
+    const { LOG_PANEL_ID, PANEL_ID, CHAT_PANEL_ID, AI_CHAT_PANEL_ID, escapeHtml } = context;
     const entries = [];
     const MAX_ENTRIES = 300;
     let panel = null;
@@ -50,17 +50,20 @@
           font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
         #${LOG_PANEL_ID}.chat-position { top: 84px; left: 396px; }
-        #${PANEL_ID}.boss-auto-unified-panel, #${CHAT_PANEL_ID}.boss-auto-unified-panel { display: grid; grid-template-columns: minmax(280px, 336px) minmax(280px, 320px); grid-template-rows: auto 1fr; width: 672px; max-width: calc(100vw - 24px); max-height: calc(100vh - 108px); overflow: hidden; }
+        #${PANEL_ID}.boss-auto-unified-panel, #${CHAT_PANEL_ID}.boss-auto-unified-panel { display: grid; grid-template-columns: minmax(280px, 320px) minmax(280px, 336px) minmax(280px, 320px); grid-template-rows: auto 1fr; width: 992px; max-width: calc(100vw - 24px); max-height: calc(100vh - 108px); overflow: hidden; }
         #${PANEL_ID}.boss-auto-unified-panel > .boss-auto-panel-header, #${CHAT_PANEL_ID}.boss-auto-unified-panel > .chat-panel-header { grid-column: 1 / -1; }
-        #${PANEL_ID}.boss-auto-unified-panel > .boss-auto-panel-body { grid-column: 1; min-width: 0; overflow: auto; }
-        #${CHAT_PANEL_ID}.boss-auto-unified-panel > :not(.chat-panel-header):not(#${LOG_PANEL_ID}) { grid-column: 1; }
-        #${CHAT_PANEL_ID}.boss-auto-unified-panel > #${LOG_PANEL_ID} { grid-column: 2; grid-row: 2 / span 5; }
+        #${PANEL_ID}.boss-auto-unified-panel > .boss-auto-panel-body { grid-column: 2; min-width: 0; overflow: auto; }
+        #${CHAT_PANEL_ID}.boss-auto-unified-panel > :not(.chat-panel-header):not(#${LOG_PANEL_ID}):not(#${AI_CHAT_PANEL_ID}) { grid-column: 2; }
+        #${PANEL_ID}.boss-auto-unified-panel > #${AI_CHAT_PANEL_ID}, #${CHAT_PANEL_ID}.boss-auto-unified-panel > #${AI_CHAT_PANEL_ID} { grid-column: 1; grid-row: 2 / span 5; }
+        #${PANEL_ID}.boss-auto-unified-panel > #${LOG_PANEL_ID}, #${CHAT_PANEL_ID}.boss-auto-unified-panel > #${LOG_PANEL_ID} { grid-column: 3; grid-row: 2 / span 5; }
         #${PANEL_ID}.boss-auto-unified-panel.collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.collapsed { display: block; width: 190px; min-width: 190px; }
-        #${PANEL_ID}.boss-auto-unified-panel.collapsed > #${LOG_PANEL_ID}, #${CHAT_PANEL_ID}.boss-auto-unified-panel.collapsed > #${LOG_PANEL_ID} { display: none; }
+        #${PANEL_ID}.boss-auto-unified-panel.collapsed > #${LOG_PANEL_ID}, #${PANEL_ID}.boss-auto-unified-panel.collapsed > #${AI_CHAT_PANEL_ID}, #${CHAT_PANEL_ID}.boss-auto-unified-panel.collapsed > #${LOG_PANEL_ID}, #${CHAT_PANEL_ID}.boss-auto-unified-panel.collapsed > #${AI_CHAT_PANEL_ID} { display: none; }
         #${PANEL_ID}.boss-auto-unified-panel.compact, #${CHAT_PANEL_ID}.boss-auto-unified-panel.compact { display: block; }
         #${PANEL_ID}.boss-auto-unified-panel.compact > .boss-auto-panel-body { max-height: 360px; overflow: auto; }
         #${CHAT_PANEL_ID}.boss-auto-unified-panel.compact > #${LOG_PANEL_ID} { border-top: 1px solid #e4efe9; border-left: 0; }
-        #${PANEL_ID}.boss-auto-unified-panel.log-collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.log-collapsed { grid-template-columns: minmax(280px, 336px) 42px; width: 378px; }
+        #${PANEL_ID}.boss-auto-unified-panel.log-collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.log-collapsed { grid-template-columns: minmax(280px, 320px) minmax(280px, 336px) 42px; width: 698px; }
+        #${PANEL_ID}.boss-auto-unified-panel.ai-collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.ai-collapsed { grid-template-columns: 42px minmax(280px, 336px) minmax(280px, 320px); width: 698px; }
+        #${PANEL_ID}.boss-auto-unified-panel.ai-collapsed.log-collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.ai-collapsed.log-collapsed { grid-template-columns: 42px minmax(280px, 336px) 42px; width: 420px; }
         #${LOG_PANEL_ID}.integrated.collapsed { display: block; width: 42px; min-width: 42px; height: 100%; overflow: hidden; }
         #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-header { height: 100%; min-height: 180px; padding: 10px 5px; flex-direction: column; justify-content: flex-start; gap: 7px; }
         #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-title { writing-mode: vertical-rl; font-size: 11px; }
@@ -83,7 +86,7 @@
         #${LOG_PANEL_ID} .boss-auto-log-entry[data-type="error"] span { color:#c93636; }
         #${LOG_PANEL_ID}.collapsed { width:190px; height:auto; }
         #${LOG_PANEL_ID}.collapsed .boss-auto-log-list { display:none; }
-        @media (max-width: 900px) { #${PANEL_ID}.boss-auto-unified-panel, #${CHAT_PANEL_ID}.boss-auto-unified-panel { display: block; width: min(100vw - 24px, 420px); max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto; } #${PANEL_ID}.boss-auto-unified-panel.log-collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.log-collapsed { width: min(100vw - 24px, 378px); } #${LOG_PANEL_ID}.integrated { border-top: 1px solid #e4efe9; border-left: 0; } #${LOG_PANEL_ID}.integrated .boss-auto-log-list { height: 260px; } #${LOG_PANEL_ID}.integrated.collapsed { width: 100%; height: 42px; min-width: 0; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-header { min-height: 42px; height: 42px; flex-direction: row; align-items: center; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-title { writing-mode: horizontal-tb; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-collapse { margin-top: 0; margin-left: auto; } }
+        @media (max-width: 900px) { #${PANEL_ID}.boss-auto-unified-panel, #${CHAT_PANEL_ID}.boss-auto-unified-panel { display: block; width: min(100vw - 24px, 420px); max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto; } #${PANEL_ID}.boss-auto-unified-panel.log-collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.log-collapsed, #${PANEL_ID}.boss-auto-unified-panel.ai-collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.ai-collapsed { width: min(100vw - 24px, 378px); } #${LOG_PANEL_ID}.integrated { border-top: 1px solid #e4efe9; border-left: 0; } #${LOG_PANEL_ID}.integrated .boss-auto-log-list { height: 260px; } #${LOG_PANEL_ID}.integrated.collapsed { width: 100%; height: 42px; min-width: 0; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-header { min-height: 42px; height: 42px; flex-direction: row; align-items: center; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-title { writing-mode: horizontal-tb; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-collapse { margin-top: 0; margin-left: auto; } #${AI_CHAT_PANEL_ID}.integrated { width: 100%; min-height: 0; height: 360px; } #${AI_CHAT_PANEL_ID}.integrated.collapsed { width: 100%; height: 42px; min-width: 0; } #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-header { min-height: 42px; height: 42px; flex-direction: row; align-items: center; } #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-title { writing-mode: horizontal-tb; } #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-collapse { margin-top: 0; margin-left: auto; } }
       `;
       document.head.appendChild(style);
       panel = document.createElement('section');

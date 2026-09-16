@@ -42,7 +42,7 @@
   }
   window.BossAutoSetStatus = setStatus;
   window.BossAutoLogInstance = typeof window.BossAutoLog === 'function'
-    ? window.BossAutoLog({ LOG_PANEL_ID, PANEL_ID, CHAT_PANEL_ID, escapeHtml })
+    ? window.BossAutoLog({ LOG_PANEL_ID, PANEL_ID, CHAT_PANEL_ID, AI_CHAT_PANEL_ID, escapeHtml })
     : {
       add() {}, createLogPanel() {}, removeLogPanel() {}, setPage() {}, attachTo() {},
     };
