@@ -83,7 +83,7 @@
   });
   const { createChatPanel, stopChatMonitor } = chat;
   const aiChat = typeof window.BossAutoAiChat === 'function'
-    ? window.BossAutoAiChat({ AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS, loadConfig: window.BossAutoStorage.loadConfig, setStatus, escapeHtml })
+    ? window.BossAutoAiChat({ AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS, loadConfig: window.BossAutoStorage.loadConfig, loadConfigStore: window.BossAutoStorage.loadConfigStore, saveConfig: window.BossAutoStorage.saveConfig, setStatus, escapeHtml })
     : { createAiChatPanel() {}, removeAiChatPanel() {} };
   const jobs = window.BossAutoJobs({
     setStatus, getConfig, loadConfig: window.BossAutoStorage.loadConfig,

@@ -3,15 +3,115 @@
 
   window.BossAutoAiChat = function createAiChatModule(context) {
     const {
-      AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS, loadConfig, setStatus, escapeHtml,
+      AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS,
+      loadConfig, loadConfigStore, saveConfig, setStatus, escapeHtml,
     } = context;
     let panel = null;
     let targetId = null;
     let messages = [];
     let busy = false;
-
     function addLog(message, type = 'info') {
       window.BossAutoLogInstance?.add(message, type);
+    }
+
+    const nullableString = { type: ['string', 'null'] };
+    const nullableBoolean = { type: ['boolean', 'null'] };
+    const updateConfigTool = {
+      type: 'function',
+      function: {
+        name: 'update_user_config',
+        description: '修改当前配置版本中的求职筛选和 AI 设置。只在用户明确要求修改时调用。API Key 不在工具范围内。',
+        strict: true,
+        parameters: {
+          type: 'object',
+          properties: {
+            keywords: nullableString,
+            locations: nullableString,
+            blockedWords: nullableString,
+            resumePrompt: nullableString,
+            aiPrompt: nullableString,
+            aiModel: nullableString,
+            aiEnabled: nullableBoolean,
+            aiFailurePolicy: { type: ['string', 'null'], enum: ['skip', 'keep', null] },
+            onlineStatusMode: { type: ['string', 'null'], enum: ['不限', '状态筛选', null] },
+            selectedOnlineStatuses: {
+              type: ['array', 'null'], items: { type: 'string' },
+            },
+          },
+          required: ['keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt', 'aiModel', 'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'selectedOnlineStatuses'],
+          additionalProperties: false,
+        },
+      },
+    };
+    const readConfigTool = {
+      type: 'function',
+      function: {
+        name: 'read_user_config',
+        description: '读取当前配置版本，供 AI 了解用户的求职筛选和 AI 设置。不会返回 API Key 原文。',
+        strict: true,
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: [],
+          additionalProperties: false,
+        },
+      },
+    };
+
+    function updateUserConfig(argumentsText) {
+      let changes;
+      try {
+        changes = JSON.parse(argumentsText || '{}');
+      } catch {
+        throw new Error('AI 配置工具参数不是有效 JSON');
+      }
+      const current = loadConfig();
+      const next = { ...current };
+      const editableFields = [
+        'keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt',
+        'aiModel', 'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'selectedOnlineStatuses',
+      ];
+      editableFields.forEach((field) => {
+        if (changes[field] !== null && changes[field] !== undefined) next[field] = changes[field];
+      });
+      if (next.onlineStatusMode === '不限') next.selectedOnlineStatuses = [];
+      if (next.onlineStatusMode === '状态筛选' && !Array.isArray(next.selectedOnlineStatuses)) {
+        next.selectedOnlineStatuses = [];
+      }
+      saveConfig(next);
+      window.dispatchEvent(new Event('boss-auto-config-changed'));
+      const changedFields = editableFields.filter((field) => changes[field] !== null && changes[field] !== undefined);
+      if (!changedFields.length) return '没有需要修改的配置';
+      return `配置已更新：${changedFields.join('、')}`;
+    }
+
+    function readUserConfig() {
+      const config = loadConfig();
+      const store = loadConfigStore();
+      const versionNumber = store.versions.findIndex((version) => version.id === config.versionId) + 1;
+      return JSON.stringify({
+        versionNumber,
+        versionId: config.versionId,
+        versionName: config.versionName,
+        keywords: config.keywords,
+        locations: config.locations,
+        blockedWords: config.blockedWords,
+        onlineStatusMode: config.onlineStatusMode,
+        selectedOnlineStatuses: config.selectedOnlineStatuses,
+        unknownOnlineStatusPolicy: config.unknownOnlineStatusPolicy,
+        aiEnabled: config.aiEnabled,
+        aiEndpoint: config.aiEndpoint,
+        aiModel: config.aiModel,
+        apiKeyConfigured: Boolean(config.aiApiKey),
+        resumePrompt: config.resumePrompt,
+        aiPrompt: config.aiPrompt,
+        aiFailurePolicy: config.aiFailurePolicy,
+        messageSequence: (config.messageSequence || []).map((message, index) => ({
+          index: index + 1,
+          type: message.type,
+          content: message.type === 'image' ? (message.name || '图片') : message.content,
+        })),
+      }, null, 2);
     }
 
     function renderMessages() {
@@ -83,8 +183,8 @@
 
       const systemContext = [
         '你是求职助手，请用中文回答用户问题。',
+        '需要了解当前配置时使用 read_user_config；当用户明确要求修改求职配置时使用 update_user_config；没有明确要求时不要修改配置。不要尝试修改 API Key。',
         config.resumePrompt,
-        config.aiPrompt,
       ].filter(Boolean).join('\n\n');
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
@@ -101,6 +201,8 @@
             temperature: 0.2,
             max_tokens: 1024,
             ...(isDeepSeek ? { thinking: { type: 'disabled' } } : {}),
+            tools: [readConfigTool, updateConfigTool],
+            tool_choice: 'auto',
             messages: [
               { role: 'system', content: systemContext },
               ...messages.map((item) => ({ role: item.role, content: item.content })),
@@ -110,9 +212,27 @@
         });
         if (!response.ok) throw new Error(`AI 接口 HTTP ${response.status}`);
         const data = await response.json();
-        const answer = data?.choices?.[0]?.message?.content;
-        if (!answer) throw new Error('AI 接口未返回内容');
-        messages.push({ role: 'assistant', content: String(answer).trim() });
+        const responseMessage = data?.choices?.[0]?.message;
+        const toolCalls = responseMessage?.tool_calls || [];
+        if (toolCalls.length) {
+          const toolResults = toolCalls.map((toolCall) => {
+            let result;
+            if (toolCall?.function?.name === 'update_user_config') {
+              result = updateUserConfig(toolCall.function.arguments);
+            } else if (toolCall?.function?.name === 'read_user_config') {
+              result = `当前配置：\n${readUserConfig()}`;
+            } else {
+              throw new Error('AI 返回了不支持的工具');
+            }
+            addLog(toolCall.function.name === 'read_user_config' ? 'AI 读取了当前配置' : result, 'success');
+            return result;
+          });
+          messages.push({ role: 'assistant', content: toolResults.join('\n') });
+        } else {
+          const answer = responseMessage?.content;
+          if (!answer) throw new Error('AI 接口未返回内容');
+          messages.push({ role: 'assistant', content: String(answer).trim() });
+        }
         renderMessages();
         addLog('AI 对话回复成功', 'success');
       } catch (error) {
@@ -198,7 +318,8 @@
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message { max-width:88%; padding:8px 10px; border-radius:10px; word-break:break-word; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-user { align-self:flex-end; color:#fff; background:#187a64; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-assistant { align-self:flex-start; color:#29483d; background:#eef8f3; }
-        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-footer { display:flex; gap:7px; padding:10px; border-top:1px solid #e4efe9; background:#fff; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-footer { display:grid; grid-template-columns:minmax(0,1fr) 54px; gap:7px; padding:10px; border-top:1px solid #e4efe9; background:#fff; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-storage-hint { grid-column:1 / -1; color:#8b9b94; font-size:10px; line-height:1.3; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-input { flex:1; min-width:0; min-height:38px; max-height:100px; resize:vertical; padding:8px 9px; color:#243e34; background:#f8faf9; border:1px solid #e1eae5; border-radius:8px; outline:none; font:inherit; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-input:focus { border-color:#21846a; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-send { width:54px; color:#fff; background:#187a64; border:0; }
@@ -212,9 +333,10 @@
       panel.innerHTML = `
         <div class="boss-auto-ai-chat-header"><span class="boss-auto-ai-chat-title">AI 对话</span><div><button type="button" class="boss-auto-ai-chat-clear">清空</button><button type="button" class="boss-auto-ai-chat-collapse" title="收起 AI 对话" aria-label="收起 AI 对话" aria-expanded="true">−</button></div></div>
         <div class="boss-auto-ai-chat-list"><div class="boss-auto-ai-chat-empty">输入问题，开始和 AI 对话</div></div>
-        <div class="boss-auto-ai-chat-footer"><textarea class="boss-auto-ai-chat-input" rows="2" placeholder="输入消息，Enter 发送"></textarea><button type="button" class="boss-auto-ai-chat-send">发送</button></div>
+        <div class="boss-auto-ai-chat-footer"><div class="boss-auto-ai-chat-storage-hint">对话仅保存在当前页面内存，刷新或切页后清空</div><textarea class="boss-auto-ai-chat-input" rows="2" placeholder="输入消息，Enter 发送"></textarea><button type="button" class="boss-auto-ai-chat-send">发送</button></div>
       `;
       document.body.appendChild(panel);
+      renderMessages();
       panel.querySelector('.boss-auto-ai-chat-clear').addEventListener('click', clearConversation);
       panel.querySelector('.boss-auto-ai-chat-collapse').addEventListener('pointerdown', (event) => event.stopPropagation());
       panel.querySelector('.boss-auto-ai-chat-collapse').addEventListener('click', (event) => {

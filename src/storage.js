@@ -4,6 +4,14 @@
   const { CONFIG_KEY, MESSAGE_RECORDS_KEY, MAX_IMAGE_SIZE_BYTES, MESSAGE_INTERVAL_MS } = window.BossAutoConstants;
   const imageSelectionTokens = new WeakMap();
 
+  function createDefaultAiConnection(overrides = {}) {
+    return {
+      aiEndpoint: overrides.aiEndpoint || 'https://api.deepseek.com/chat/completions',
+      aiModel: overrides.aiModel || 'deepseek-v4-flash',
+      aiApiKey: overrides.aiApiKey || '',
+    };
+  }
+
   function createDefaultVersion(overrides = {}) {
     return {
       id: overrides.id || `version-${Date.now()}`,
@@ -17,9 +25,6 @@
       selectedOnlineStatuses: Array.isArray(overrides.selectedOnlineStatuses) ? overrides.selectedOnlineStatuses : [],
       unknownOnlineStatusPolicy: overrides.unknownOnlineStatusPolicy || 'skip',
       aiEnabled: Boolean(overrides.aiEnabled),
-      aiEndpoint: overrides.aiEndpoint || 'https://api.deepseek.com/chat/completions',
-      aiModel: overrides.aiModel || 'deepseek-v4-flash',
-      aiApiKey: overrides.aiApiKey || '',
       resumePrompt: overrides.resumePrompt || '',
       aiPrompt: overrides.aiPrompt || '',
       aiFailurePolicy: overrides.aiFailurePolicy || 'skip',
@@ -47,22 +52,33 @@
         const versions = saved.versions.map(normalizeVersion);
         const activeVersionId = versions.some((version) => version.id === saved.activeVersionId)
           ? saved.activeVersionId : versions[0].id;
-        return { schemaVersion: 3, activeVersionId, versions };
+        const activeSource = saved.versions.find((version) => version.id === activeVersionId) || saved.versions[0];
+        return {
+          schemaVersion: 4,
+          activeVersionId,
+          ai: createDefaultAiConnection({ ...activeSource, ...saved.ai }),
+          versions,
+        };
       }
 
       // 将旧版扁平配置迁移为单个“默认配置”版本。
       const legacy = normalizeVersion(saved, 0);
-      return { schemaVersion: 3, activeVersionId: legacy.id, versions: [legacy] };
+      return {
+        schemaVersion: 4,
+        activeVersionId: legacy.id,
+        ai: createDefaultAiConnection(saved),
+        versions: [legacy],
+      };
     } catch {
       const fallback = createDefaultVersion({ id: 'version-default', name: '默认配置' });
-      return { schemaVersion: 3, activeVersionId: fallback.id, versions: [fallback] };
+      return { schemaVersion: 4, activeVersionId: fallback.id, ai: createDefaultAiConnection(), versions: [fallback] };
     }
   }
 
   function loadConfig() {
     const store = loadConfigStore();
     const active = store.versions.find((version) => version.id === store.activeVersionId) || store.versions[0];
-    return { ...active, versionId: active.id, versionName: active.name };
+    return { ...active, ...store.ai, versionId: active.id, versionName: active.name };
   }
 
   function saveConfig(config) {
@@ -74,8 +90,14 @@
       id: activeVersionId,
       name: config.versionName || store.versions.find((version) => version.id === activeVersionId)?.name,
     });
+    const ai = createDefaultAiConnection({
+      ...store.ai,
+      aiEndpoint: config.aiEndpoint,
+      aiModel: config.aiModel,
+      aiApiKey: config.aiApiKey,
+    });
     const versions = store.versions.map((version) => version.id === activeVersionId ? nextVersion : version);
-    localStorage.setItem(CONFIG_KEY, JSON.stringify({ schemaVersion: 3, activeVersionId, versions }));
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({ schemaVersion: 4, activeVersionId, ai, versions }));
   }
 
   function saveConfigStore(store) {
@@ -83,7 +105,12 @@
     if (!versions.length) throw new Error('至少需要保留一个配置版本');
     const activeVersionId = versions.some((version) => version.id === store.activeVersionId)
       ? store.activeVersionId : versions[0].id;
-    localStorage.setItem(CONFIG_KEY, JSON.stringify({ schemaVersion: 3, activeVersionId, versions }));
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({
+      schemaVersion: 4,
+      activeVersionId,
+      ai: createDefaultAiConnection(store.ai),
+      versions,
+    }));
   }
 
   function setActiveVersion(versionId) {

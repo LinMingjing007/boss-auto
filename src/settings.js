@@ -116,6 +116,9 @@
         #${SETTINGS_VIEW_ID} .boss-auto-ai-toggle { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 12px; color: #245247; background: #eff8f3; border-radius: 9px; font-weight: 600; }
         #${SETTINGS_VIEW_ID} .boss-auto-ai-toggle input { width: 16px; height: 16px; margin: 0; accent-color: #187a64; }
         #${SETTINGS_VIEW_ID} .boss-auto-ai-details { margin-top: 14px; padding-top: 4px; border-top: 1px dashed #dcece3; }
+        #${SETTINGS_VIEW_ID} .boss-auto-ai-subsection { padding: 10px 0 2px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-ai-subsection + .boss-auto-ai-subsection { margin-top: 14px; padding-top: 14px; border-top: 1px solid #edf3ef; }
+        #${SETTINGS_VIEW_ID} .boss-auto-ai-subsection h4 { margin: 0 0 8px; color: #245247; font-size: 13px; }
         #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-top: 20px; padding: 12px; background: #f7faf8; border-radius: 10px; }
         #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar label { flex: 1 1 220px; margin: 0; }
         #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar button { min-height: 34px; padding: 6px 9px; font-size: 12px; }
@@ -149,6 +152,14 @@
             <button type="button" class="boss-auto-rename-version">重命名</button>
             <button type="button" class="boss-auto-delete-version">删除版本</button>
           </div>
+          <div class="boss-auto-settings-section boss-auto-global-ai-section">
+            <h3>AI 接入配置（全局共用）</h3>
+            <span class="boss-auto-section-hint">接口地址、模型和 API Key 不属于配置版本；切换配置版本时保持不变。</span>
+            <label><span>AI 接口地址</span><input type="text" name="aiEndpoint" value="${escapeHtml(config.aiEndpoint)}" placeholder="例如：https://api.openai.com/v1/chat/completions"></label>
+            <label><span>模型选择</span><select name="aiModel">${aiModelOptions(config.aiModel)}</select></label>
+            <label class="boss-auto-custom-model-field" style="${AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? 'display:none;' : ''}"><span>自定义模型名称</span><input type="text" name="aiCustomModel" value="${escapeHtml(AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? '' : config.aiModel)}" placeholder="例如：gpt-4o-mini"></label>
+            <label><span>API Key</span><input type="password" name="aiApiKey" value="${escapeHtml(config.aiApiKey)}" placeholder="仅保存在当前浏览器"></label>
+          </div>
           <div class="boss-auto-settings-section">
             <h3>职位筛选</h3>
             <span class="boss-auto-section-hint">用于从职位列表中筛选符合方向的岗位，多个条件用 “-” 分隔。</span>
@@ -168,13 +179,12 @@
             <label class="boss-auto-ai-toggle"><input type="checkbox" name="aiEnabled" ${config.aiEnabled ? 'checked' : ''}> 启用 AI 判别</label>
             <span class="boss-auto-section-hint">打开职位详情后，系统会把已读取的岗位信息和下方提示词发送给 AI，作为是否点击“立即沟通”的判断因素。</span>
             <div class="boss-auto-ai-details">
-              <label><span>AI 接口地址</span><input type="text" name="aiEndpoint" value="${escapeHtml(config.aiEndpoint)}" placeholder="例如：https://api.openai.com/v1/chat/completions"></label>
-              <label><span>模型选择</span><select name="aiModel">${aiModelOptions(config.aiModel)}</select></label>
-              <label class="boss-auto-custom-model-field" style="${AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? 'display:none;' : ''}"><span>自定义模型名称</span><input type="text" name="aiCustomModel" value="${escapeHtml(AI_MODEL_OPTIONS.some((option) => option.value === config.aiModel) ? '' : config.aiModel)}" placeholder="例如：gpt-4o-mini"></label>
-              <label><span>API Key</span><input type="password" name="aiApiKey" value="${escapeHtml(config.aiApiKey)}" placeholder="仅保存在当前浏览器"></label>
-              <label><span>简历提示词</span><textarea name="resumePrompt" placeholder="描述求职者的经历、技能、期望或其他需要 AI 参考的信息。">${escapeHtml(config.resumePrompt)}</textarea></label>
-              <label><span>判断提示词</span><textarea name="aiPrompt" placeholder="请根据岗位信息判断是否适合我。">${escapeHtml(config.aiPrompt)}</textarea></label>
-              <label><span>AI 调用失败时</span><select name="aiFailurePolicy"><option value="skip" ${config.aiFailurePolicy === 'skip' ? 'selected' : ''}>跳过职位</option><option value="keep" ${config.aiFailurePolicy === 'keep' ? 'selected' : ''}>允许继续</option></select></label>
+              <div class="boss-auto-ai-subsection">
+                <h4>AI 判别规则（当前配置版本）</h4>
+                <label><span>简历提示词</span><textarea name="resumePrompt" placeholder="描述求职者的经历、技能、期望或其他需要 AI 参考的信息。">${escapeHtml(config.resumePrompt)}</textarea></label>
+                <label><span>判断提示词</span><textarea name="aiPrompt" placeholder="请根据岗位信息判断是否适合我。">${escapeHtml(config.aiPrompt)}</textarea></label>
+                <label><span>AI 调用失败时</span><select name="aiFailurePolicy"><option value="skip" ${config.aiFailurePolicy === 'skip' ? 'selected' : ''}>跳过职位</option><option value="keep" ${config.aiFailurePolicy === 'keep' ? 'selected' : ''}>允许继续</option></select></label>
+              </div>
             </div>
           </div>
           <div class="boss-auto-settings-section">
