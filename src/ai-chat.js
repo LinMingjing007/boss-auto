@@ -208,9 +208,11 @@
       if (!request.question || !Array.isArray(request.options) || !request.options.length) {
         throw new Error('AI ask_user 缺少问题或选项');
       }
+      const options = request.options.map((option) => String(option)).filter(Boolean);
+      if (!options.length) throw new Error('AI ask_user 没有有效选项');
       return {
         question: String(request.question),
-        options: request.options.map((option) => String(option)).filter(Boolean),
+        options,
         allowOther: request.allowOther === true,
       };
     }
@@ -244,6 +246,7 @@
     function renderMessages() {
       const list = panel?.querySelector('.boss-auto-ai-chat-list');
       if (!list) return;
+      const shouldStickToBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 48;
       const openStates = [...list.querySelectorAll('.boss-auto-ai-chat-message')].map((message) => message.open);
       list.innerHTML = messages.length ? messages.map((message, index) => {
         const text = getMessageText(message);
@@ -270,7 +273,7 @@
           }
         });
       }
-      list.scrollTop = list.scrollHeight;
+      if (shouldStickToBottom) list.scrollTop = list.scrollHeight;
     }
 
     function positionPanel() {
@@ -293,6 +296,13 @@
     }
 
     function clearConversation() {
+      if (pendingAskUser) {
+        const { reject } = pendingAskUser;
+        pendingAskUser = null;
+        const error = new Error('用户取消了本次提问');
+        error.code = 'USER_CANCELLED';
+        reject(error);
+      }
       messages = [];
       pendingAttachment = null;
       renderAttachmentPreview();
@@ -406,31 +416,36 @@
         '需要了解当前配置时使用 read_user_config；当用户明确要求修改求职配置时使用 update_user_config；没有明确要求时不要修改配置。AI 接入配置（接口地址、模型和 API Key）不可读取、不可修改。',
         config.resumePrompt,
       ].filter(Boolean).join('\n\n');
-      const controller = new AbortController();
-      const timer = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
       try {
         const conversation = [
           { role: 'system', content: systemContext },
           ...messages.map((item) => ({ role: item.role, content: item.content })),
         ];
         while (true) {
-          const response = await fetch(config.aiEndpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${config.aiApiKey}`,
-            },
-            body: JSON.stringify({
-              model: config.aiModel,
-              temperature: 0.2,
-              max_tokens: 1024,
-              thinking: { type: 'disabled' },
-              tools: [readConfigTool, updateConfigTool, askUserTool],
-              tool_choice: 'auto',
-              messages: conversation,
-            }),
-            signal: controller.signal,
-          });
+          const controller = new AbortController();
+          const timer = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+          let response;
+          try {
+            response = await fetch(config.aiEndpoint, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${config.aiApiKey}`,
+              },
+              body: JSON.stringify({
+                model: config.aiModel,
+                temperature: 0.2,
+                max_tokens: 1024,
+                thinking: { type: 'disabled' },
+                tools: [readConfigTool, updateConfigTool, askUserTool],
+                tool_choice: 'auto',
+                messages: conversation,
+              }),
+              signal: controller.signal,
+            });
+          } finally {
+            window.clearTimeout(timer);
+          }
           if (!response.ok) throw new Error(`AI 接口 HTTP ${response.status}`);
           const data = await response.json();
           const responseMessage = data?.choices?.[0]?.message;
@@ -467,11 +482,14 @@
       } catch (error) {
         if (messages.at(-1)?.role === 'user' && messages.at(-1).displayContent === displayContent) messages.pop();
         renderMessages();
-        const message = error.name === 'AbortError' ? 'AI 请求超时' : error.message;
-        setStatus(`AI 对话失败：${message}`, 'error');
-        addLog(`AI 对话失败：${message}`, 'error');
+        if (error.code === 'USER_CANCELLED') {
+          addLog('AI 对话已取消');
+        } else {
+          const message = error.name === 'AbortError' ? 'AI 请求超时' : error.message;
+          setStatus(`AI 对话失败：${message}`, 'error');
+          addLog(`AI 对话失败：${message}`, 'error');
+        }
       } finally {
-        window.clearTimeout(timer);
         busy = false;
         if (sendButton) {
           sendButton.disabled = false;
