@@ -10,6 +10,7 @@
     let targetId = null;
     let messages = [];
     let busy = false;
+    let pendingAttachment = null;
     function addLog(message, type = 'info') {
       window.BossAutoLogInstance?.add(message, type);
     }
@@ -120,7 +121,7 @@
       const list = panel?.querySelector('.boss-auto-ai-chat-list');
       if (!list) return;
       list.innerHTML = messages.length ? messages.map((message) => (
-        `<div class="boss-auto-ai-chat-message ${message.role === 'user' ? 'is-user' : 'is-assistant'}">${escapeHtml(message.content).replace(/\n/g, '<br>')}</div>`
+        `<div class="boss-auto-ai-chat-message ${message.role === 'user' ? 'is-user' : 'is-assistant'}">${escapeHtml(message.displayContent || message.content).replace(/\n/g, '<br>')}</div>`
       )).join('') : '<div class="boss-auto-ai-chat-empty">输入问题，开始和 AI 对话</div>';
       list.scrollTop = list.scrollHeight;
     }
@@ -146,8 +147,48 @@
 
     function clearConversation() {
       messages = [];
+      pendingAttachment = null;
       renderMessages();
       addLog('已清空 AI 对话');
+    }
+
+    async function loadAttachment(event) {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) {
+        setStatus('文件超过 2MB，无法导入 AI 对话', 'error');
+        addLog(`AI 文件导入失败：${file.name} 超过 2MB`, 'error');
+        return;
+      }
+      try {
+        const input = panel.querySelector('.boss-auto-ai-chat-input');
+        if (file.type.startsWith('image/')) {
+          if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+            throw new Error('DeepSeek 暂不支持该图片格式');
+          }
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = () => reject(new Error('图片读取失败'));
+            reader.onload = () => resolve(reader.result);
+            reader.readAsDataURL(file);
+          });
+          pendingAttachment = { name: file.name, dataUrl };
+          input.focus();
+          addLog(`已选择图片：${file.name}`);
+          return;
+        }
+        const text = await file.text();
+        if (!text.trim()) throw new Error('文件内容为空');
+        const prefix = input.value.trim() ? `${input.value.trim()}\n\n` : '';
+        input.value = `${prefix}文件：${file.name}\n${text}`;
+        pendingAttachment = null;
+        input.focus();
+        addLog(`已导入文件：${file.name}`);
+      } catch (error) {
+        setStatus(`文件导入失败：${error.message}`, 'error');
+        addLog(`AI 文件导入失败：${error.message}`, 'error');
+      }
     }
 
     function toggleCollapsed() {
@@ -165,7 +206,7 @@
       const input = panel?.querySelector('.boss-auto-ai-chat-input');
       const sendButton = panel?.querySelector('.boss-auto-ai-chat-send');
       const content = input?.value.trim();
-      if (!content) return;
+      if (!content && !pendingAttachment) return;
       const config = loadConfig();
       if (!config.aiEndpoint || !config.aiModel || !config.aiApiKey) {
         setStatus('请先在设置中完善 AI 接口、模型和 API Key', 'error');
@@ -178,8 +219,15 @@
         return;
       }
 
-      messages.push({ role: 'user', content });
+      const attachment = pendingAttachment;
+      const displayContent = `${content}${content && attachment ? '\n' : ''}${attachment ? `图片：${attachment.name}` : ''}`;
+      const messageContent = attachment ? [
+        { type: 'text', text: content || '请分析这张图片。' },
+        { type: 'image_url', image_url: { url: attachment.dataUrl, detail: 'auto' } },
+      ] : content;
+      messages.push({ role: 'user', content: messageContent, displayContent });
       input.value = '';
+      pendingAttachment = null;
       renderMessages();
       busy = true;
       if (sendButton) {
@@ -242,7 +290,7 @@
         renderMessages();
         addLog('AI 对话回复成功', 'success');
       } catch (error) {
-        if (messages.at(-1)?.role === 'user' && messages.at(-1).content === content) messages.pop();
+        if (messages.at(-1)?.role === 'user' && messages.at(-1).displayContent === displayContent) messages.pop();
         renderMessages();
         const message = error.name === 'AbortError' ? 'AI 请求超时' : error.message;
         setStatus(`AI 对话失败：${message}`, 'error');
@@ -324,11 +372,13 @@
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message { max-width:88%; padding:8px 10px; border-radius:10px; word-break:break-word; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-user { align-self:flex-end; color:#fff; background:#187a64; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-assistant { align-self:flex-start; color:#29483d; background:#eef8f3; }
-        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-footer { display:grid; grid-template-columns:minmax(0,1fr) 54px; gap:7px; padding:10px; border-top:1px solid #e4efe9; background:#fff; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-footer { display:grid; grid-template-columns:minmax(0,1fr) 54px 54px; gap:7px; padding:10px; border-top:1px solid #e4efe9; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-storage-hint { grid-column:1 / -1; color:#8b9b94; font-size:10px; line-height:1.3; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-input { flex:1; min-width:0; min-height:38px; max-height:100px; resize:vertical; padding:8px 9px; color:#243e34; background:#f8faf9; border:1px solid #e1eae5; border-radius:8px; outline:none; font:inherit; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-input:focus { border-color:#21846a; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-send { width:54px; color:#fff; background:#187a64; border:0; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-file-button { display:flex; align-items:center; justify-content:center; width:54px; color:#426e62; background:#f6f9f7; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-file { display:none; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-send:disabled { opacity:.6; cursor:wait; }
         @media (max-width:900px) { #${AI_CHAT_PANEL_ID} { top:12px; left:12px; width:min(320px,calc(100vw - 24px)); } }
       `;
@@ -339,7 +389,7 @@
       panel.innerHTML = `
         <div class="boss-auto-ai-chat-header"><span class="boss-auto-ai-chat-title">AI 对话</span><div><button type="button" class="boss-auto-ai-chat-clear">清空</button><button type="button" class="boss-auto-ai-chat-collapse" title="收起 AI 对话" aria-label="收起 AI 对话" aria-expanded="true">−</button></div></div>
         <div class="boss-auto-ai-chat-list"><div class="boss-auto-ai-chat-empty">输入问题，开始和 AI 对话</div></div>
-        <div class="boss-auto-ai-chat-footer"><div class="boss-auto-ai-chat-storage-hint">对话仅保存在当前页面内存，刷新或切页后清空</div><textarea class="boss-auto-ai-chat-input" rows="2" placeholder="输入消息，Enter 发送"></textarea><button type="button" class="boss-auto-ai-chat-send">发送</button></div>
+        <div class="boss-auto-ai-chat-footer"><div class="boss-auto-ai-chat-storage-hint">支持 TXT、MD、JSON、CSV、HTML 及 JPEG/PNG/GIF/WebP 图片，单个文件最大 2MB</div><textarea class="boss-auto-ai-chat-input" rows="2" placeholder="输入消息，Enter 发送"></textarea><button type="button" class="boss-auto-ai-chat-file-button">文件</button><input class="boss-auto-ai-chat-file" type="file" accept=".txt,.md,.json,.csv,.html,.jpg,.jpeg,.png,.gif,.webp,text/plain,text/markdown,application/json,text/csv,text/html,image/jpeg,image/png,image/gif,image/webp"><button type="button" class="boss-auto-ai-chat-send">发送</button></div>
       `;
       document.body.appendChild(panel);
       renderMessages();
@@ -350,6 +400,8 @@
         toggleCollapsed();
       });
       panel.querySelector('.boss-auto-ai-chat-send').addEventListener('click', sendMessage);
+      panel.querySelector('.boss-auto-ai-chat-file-button').addEventListener('click', () => panel.querySelector('.boss-auto-ai-chat-file').click());
+      panel.querySelector('.boss-auto-ai-chat-file').addEventListener('change', loadAttachment);
       panel.querySelector('.boss-auto-ai-chat-input').addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
           event.preventDefault();
@@ -376,6 +428,7 @@
       panel = null;
       targetId = null;
       messages = [];
+      pendingAttachment = null;
       busy = false;
     }
 
