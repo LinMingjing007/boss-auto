@@ -252,7 +252,7 @@
         sendButton.disabled = true;
         sendButton.textContent = '发送中…';
       }
-      addLog(`AI 对话：${content.slice(0, 80)}`);
+      addLog(`AI 对话：${(content || '图片消息').slice(0, 80)}`);
 
       const systemContext = [
         '你是求职助手，请用中文回答用户问题。',
@@ -262,32 +262,45 @@
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
       try {
-        const response = await fetch(config.aiEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${config.aiApiKey}`,
-          },
-          body: JSON.stringify({
-            model: config.aiModel,
-            temperature: 0.2,
-            max_tokens: 1024,
-            thinking: { type: 'disabled' },
-            tools: [readConfigTool, updateConfigTool],
-            tool_choice: 'auto',
-            messages: [
-              { role: 'system', content: systemContext },
-              ...messages.map((item) => ({ role: item.role, content: item.content })),
-            ],
-          }),
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error(`AI 接口 HTTP ${response.status}`);
-        const data = await response.json();
-        const responseMessage = data?.choices?.[0]?.message;
-        const toolCalls = responseMessage?.tool_calls || [];
-        if (toolCalls.length) {
-          const toolResults = toolCalls.map((toolCall) => {
+        const conversation = [
+          { role: 'system', content: systemContext },
+          ...messages.map((item) => ({ role: item.role, content: item.content })),
+        ];
+        while (true) {
+          const response = await fetch(config.aiEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${config.aiApiKey}`,
+            },
+            body: JSON.stringify({
+              model: config.aiModel,
+              temperature: 0.2,
+              max_tokens: 1024,
+              thinking: { type: 'disabled' },
+              tools: [readConfigTool, updateConfigTool],
+              tool_choice: 'auto',
+              messages: conversation,
+            }),
+            signal: controller.signal,
+          });
+          if (!response.ok) throw new Error(`AI 接口 HTTP ${response.status}`);
+          const data = await response.json();
+          const responseMessage = data?.choices?.[0]?.message;
+          const toolCalls = responseMessage?.tool_calls || [];
+          if (!toolCalls.length) {
+            const answer = responseMessage?.content;
+            if (!answer) throw new Error('AI 接口未返回内容');
+            messages.push({ role: 'assistant', content: String(answer).trim() });
+            break;
+          }
+
+          conversation.push({
+            role: 'assistant',
+            content: responseMessage.content || null,
+            tool_calls: toolCalls,
+          });
+          toolCalls.forEach((toolCall) => {
             let result;
             if (toolCall?.function?.name === 'update_user_config') {
               result = updateUserConfig(toolCall.function.arguments);
@@ -297,13 +310,8 @@
               throw new Error('AI 返回了不支持的工具');
             }
             addLog(toolCall.function.name === 'read_user_config' ? 'AI 读取了当前配置' : result, 'success');
-            return result;
+            conversation.push({ role: 'tool', tool_call_id: toolCall.id, content: result });
           });
-          messages.push({ role: 'assistant', content: toolResults.join('\n') });
-        } else {
-          const answer = responseMessage?.content;
-          if (!answer) throw new Error('AI 接口未返回内容');
-          messages.push({ role: 'assistant', content: String(answer).trim() });
         }
         renderMessages();
         addLog('AI 对话回复成功', 'success');
