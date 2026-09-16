@@ -148,8 +148,25 @@
     function clearConversation() {
       messages = [];
       pendingAttachment = null;
+      renderAttachmentPreview();
       renderMessages();
       addLog('已清空 AI 对话');
+    }
+
+    function renderAttachmentPreview() {
+      const preview = panel?.querySelector('.boss-auto-ai-chat-attachment-preview');
+      if (!preview) return;
+      if (!pendingAttachment) {
+        preview.hidden = true;
+        preview.innerHTML = '';
+        return;
+      }
+      preview.hidden = false;
+      preview.innerHTML = `<img src="${escapeHtml(pendingAttachment.dataUrl)}" alt="${escapeHtml(pendingAttachment.name)}"><span>${escapeHtml(pendingAttachment.name)}</span><button type="button" class="boss-auto-ai-chat-remove-attachment" aria-label="移除图片">×</button>`;
+      preview.querySelector('.boss-auto-ai-chat-remove-attachment').addEventListener('click', () => {
+        pendingAttachment = null;
+        renderAttachmentPreview();
+      });
     }
 
     async function processAttachment(file) {
@@ -172,6 +189,7 @@
             reader.readAsDataURL(file);
           });
           pendingAttachment = { name: file.name, dataUrl };
+          renderAttachmentPreview();
           input.focus();
           addLog(`已选择图片：${file.name}`);
           return;
@@ -181,6 +199,7 @@
         const prefix = input.value.trim() ? `${input.value.trim()}\n\n` : '';
         input.value = `${prefix}文件：${file.name}\n${text}`;
         pendingAttachment = null;
+        renderAttachmentPreview();
         input.focus();
         addLog(`已导入文件：${file.name}`);
       } catch (error) {
@@ -226,6 +245,7 @@
       messages.push({ role: 'user', content: messageContent, displayContent });
       input.value = '';
       pendingAttachment = null;
+      renderAttachmentPreview();
       renderMessages();
       busy = true;
       if (sendButton) {
@@ -373,6 +393,10 @@
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-assistant { align-self:flex-start; color:#29483d; background:#eef8f3; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-footer { display:grid; grid-template-columns:minmax(0,1fr) 54px; gap:7px; padding:10px; border-top:1px solid #e4efe9; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-storage-hint { grid-column:1 / -1; color:#8b9b94; font-size:10px; line-height:1.3; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-attachment-preview { grid-column:1 / -1; display:flex; align-items:center; gap:7px; padding:5px 7px; color:#426e62; background:#f6f9f7; border:1px solid #dcece7; border-radius:7px; font-size:10px; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-attachment-preview img { width:42px; height:42px; object-fit:cover; border-radius:5px; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-attachment-preview span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-remove-attachment { width:22px; height:22px; padding:0; color:#71857c; background:transparent; border:0; font-size:18px; line-height:18px; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-input { flex:1; min-width:0; min-height:38px; max-height:100px; resize:vertical; padding:8px 9px; color:#243e34; background:#f8faf9; border:1px solid #e1eae5; border-radius:8px; outline:none; font:inherit; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-input:focus { border-color:#21846a; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-send { width:54px; color:#fff; background:#187a64; border:0; }
@@ -386,7 +410,7 @@
       panel.innerHTML = `
         <div class="boss-auto-ai-chat-header"><span class="boss-auto-ai-chat-title">AI 对话</span><div><button type="button" class="boss-auto-ai-chat-clear">清空</button><button type="button" class="boss-auto-ai-chat-collapse" title="收起 AI 对话" aria-label="收起 AI 对话" aria-expanded="true">−</button></div></div>
         <div class="boss-auto-ai-chat-list"><div class="boss-auto-ai-chat-empty">输入问题，开始和 AI 对话</div></div>
-        <div class="boss-auto-ai-chat-footer"><div class="boss-auto-ai-chat-storage-hint">可粘贴或拖拽 TXT、MD、JSON、CSV、HTML 及 JPEG/PNG/GIF/WebP 文件，单个文件最大 2MB</div><textarea class="boss-auto-ai-chat-input" rows="2" placeholder="输入消息，Enter 发送"></textarea><button type="button" class="boss-auto-ai-chat-send">发送</button></div>
+        <div class="boss-auto-ai-chat-footer"><div class="boss-auto-ai-chat-storage-hint">可粘贴或拖拽 TXT、MD、JSON、CSV、HTML 及 JPEG/PNG/GIF/WebP 文件，单个文件最大 2MB</div><div class="boss-auto-ai-chat-attachment-preview" hidden></div><textarea class="boss-auto-ai-chat-input" rows="2" placeholder="输入消息，Enter 发送"></textarea><button type="button" class="boss-auto-ai-chat-send">发送</button></div>
       `;
       document.body.appendChild(panel);
       renderMessages();

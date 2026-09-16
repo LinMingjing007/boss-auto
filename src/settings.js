@@ -132,6 +132,7 @@
         #${SETTINGS_VIEW_ID} .boss-auto-message-row select, #${SETTINGS_VIEW_ID} button { min-height: 36px; padding: 7px 11px; border: 1px solid #d5e5dd; border-radius: 8px; background: #fff; cursor: pointer; font: inherit; }
         #${SETTINGS_VIEW_ID} .boss-auto-image-picker { display: inline-flex; align-items: center; min-height: 36px; margin: 0; padding: 0 11px; color: #187a64; border: 1px solid #d5e5dd; border-radius: 8px; background: #fff; cursor: pointer; font: inherit; }
         #${SETTINGS_VIEW_ID} .boss-auto-image-picker input[type="file"] { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+        #${SETTINGS_VIEW_ID} .boss-auto-image-preview { display: block; width: 96px; height: 72px; margin-top: 8px; object-fit: cover; border: 1px solid #dce8e2; border-radius: 8px; background: #f7faf8; }
         #${SETTINGS_VIEW_ID} .boss-auto-image-name { display: block; margin-top: 5px; color: #71857c; font-size: 12px; }
         #${SETTINGS_VIEW_ID} .boss-auto-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
         #${SETTINGS_VIEW_ID} .boss-auto-save-settings { color: #fff; background: #187a64; border-color: #187a64; }
@@ -304,6 +305,13 @@
           const content = row.querySelector('.message-content');
           if (message.type === 'image') {
             content.innerHTML = `<label class="boss-auto-image-picker">选择图片<input type="file" accept="image/*" class="message-image"></label><small class="boss-auto-image-name">${escapeHtml(message.name || '尚未选择图片')}</small>`;
+            if (message.content) {
+              const preview = document.createElement('img');
+              preview.className = 'boss-auto-image-preview';
+              preview.src = message.content;
+              preview.alt = message.name || '图片预览';
+              content.appendChild(preview);
+            }
             row.querySelector('.message-image').addEventListener('change', (event) => {
               const file = event.target.files?.[0];
               markSettingsDirty();
