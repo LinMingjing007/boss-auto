@@ -152,9 +152,7 @@
       addLog('已清空 AI 对话');
     }
 
-    async function loadAttachment(event) {
-      const file = event.target.files?.[0];
-      event.target.value = '';
+    async function processAttachment(file) {
       if (!file) return;
       if (file.size > 2 * 1024 * 1024) {
         setStatus('文件超过 2MB，无法导入 AI 对话', 'error');
@@ -189,6 +187,12 @@
         setStatus(`文件导入失败：${error.message}`, 'error');
         addLog(`AI 文件导入失败：${error.message}`, 'error');
       }
+    }
+
+    async function loadAttachment(event) {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      await processAttachment(file);
     }
 
     function toggleCollapsed() {
@@ -363,6 +367,7 @@
         #${AI_CHAT_PANEL_ID} * { box-sizing:border-box; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 14px; color:#164d43; background:linear-gradient(120deg,#e5f7ef,#f4faf7); border-bottom:1px solid #e4efe9; cursor:grab; user-select:none; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-header.dragging { cursor:grabbing; }
+        #${AI_CHAT_PANEL_ID}.drag-over { outline:2px dashed #187a64; outline-offset:-5px; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-title { font-weight:700; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-header > div { display:flex; gap:5px; }
         #${AI_CHAT_PANEL_ID} button { border:1px solid #d5e5dd; border-radius:7px; cursor:pointer; font:inherit; }
@@ -402,7 +407,30 @@
       panel.querySelector('.boss-auto-ai-chat-send').addEventListener('click', sendMessage);
       panel.querySelector('.boss-auto-ai-chat-file-button').addEventListener('click', () => panel.querySelector('.boss-auto-ai-chat-file').click());
       panel.querySelector('.boss-auto-ai-chat-file').addEventListener('change', loadAttachment);
-      panel.querySelector('.boss-auto-ai-chat-input').addEventListener('keydown', (event) => {
+      const input = panel.querySelector('.boss-auto-ai-chat-input');
+      input.addEventListener('paste', (event) => {
+        const file = [...(event.clipboardData?.items || [])]
+          .find((item) => item.kind === 'file')?.getAsFile();
+        if (!file) return;
+        event.preventDefault();
+        processAttachment(file);
+      });
+      panel.addEventListener('dragover', (event) => {
+        if (![...(event.dataTransfer?.items || [])].some((item) => item.kind === 'file')) return;
+        event.preventDefault();
+        panel.classList.add('drag-over');
+      });
+      panel.addEventListener('dragleave', (event) => {
+        if (!panel.contains(event.relatedTarget)) panel.classList.remove('drag-over');
+      });
+      panel.addEventListener('drop', (event) => {
+        const file = event.dataTransfer?.files?.[0];
+        if (!file) return;
+        event.preventDefault();
+        panel.classList.remove('drag-over');
+        processAttachment(file);
+      });
+      input.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
           event.preventDefault();
           sendMessage();
