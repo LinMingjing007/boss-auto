@@ -129,6 +129,56 @@
       return String(message.content || '');
     }
 
+    function renderMarkdown(source) {
+      let html = escapeHtml(String(source || ''));
+      const codeBlocks = [];
+      html = html.replace(/```([\w-]*)\n?([\s\S]*?)```/g, (match, language, code) => {
+        const index = codeBlocks.push(`<pre><code${language ? ` data-language="${language}"` : ''}>${code.replace(/\n$/, '')}</code></pre>`) - 1;
+        return `\n@@BOSS_AUTO_CODE_${index}@@\n`;
+      });
+      html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+      html = html.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+      html = html.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+      html = html.replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1<em>$2</em>');
+      html = html.replace(/^(#{1,6})\s+(.+)$/gm, (match, hashes, title) => `<h${hashes.length}>${title}</h${hashes.length}>`);
+      html = html.replace(/^>\s?(.*)$/gm, '<blockquote>$1</blockquote>');
+
+      const lines = html.split('\n');
+      const renderedLines = [];
+      let listType = null;
+      const closeList = () => {
+        if (listType) renderedLines.push(`</${listType}>`);
+        listType = null;
+      };
+      lines.forEach((line) => {
+        const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
+        const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
+        if (unordered || ordered) {
+          const nextType = unordered ? 'ul' : 'ol';
+          if (listType !== nextType) {
+            closeList();
+            listType = nextType;
+            renderedLines.push(`<${listType}>`);
+          }
+          renderedLines.push(`<li>${(unordered || ordered)[1]}</li>`);
+        } else {
+          closeList();
+          renderedLines.push(line);
+        }
+      });
+      closeList();
+      html = renderedLines.join('\n')
+        .replace(/\n{2,}/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+      codeBlocks.forEach((block, index) => {
+        html = html.replace(new RegExp(`<br>@@BOSS_AUTO_CODE_${index}@@<br>`), block);
+        html = html.replace(new RegExp(`@@BOSS_AUTO_CODE_${index}@@`), block);
+      });
+      return html;
+    }
+
     function renderMessages() {
       const list = panel?.querySelector('.boss-auto-ai-chat-list');
       if (!list) return;
@@ -138,7 +188,10 @@
         const summary = text.replace(/\s+/g, ' ').trim().slice(0, 42) || '空消息';
         const roleLabel = message.role === 'user' ? '我' : 'AI';
         const open = openStates[index] === undefined || openStates[index];
-        return `<details class="boss-auto-ai-chat-message ${message.role === 'user' ? 'is-user' : 'is-assistant'}"${open ? ' open' : ''}><summary><span>${roleLabel}</span><em>${escapeHtml(summary)}</em></summary><div class="boss-auto-ai-chat-message-content">${escapeHtml(text).replace(/\n/g, '<br>')}</div></details>`;
+        const renderedText = message.role === 'user'
+          ? escapeHtml(text).replace(/\n/g, '<br>')
+          : renderMarkdown(text);
+        return `<details class="boss-auto-ai-chat-message ${message.role === 'user' ? 'is-user' : 'is-assistant'}"${open ? ' open' : ''}><summary><span>${roleLabel}</span><em>${escapeHtml(summary)}</em></summary><div class="boss-auto-ai-chat-message-content">${renderedText}</div></details>`;
       }).join('') : '<div class="boss-auto-ai-chat-empty">输入问题，开始和 AI 对话</div>';
       list.scrollTop = list.scrollHeight;
     }
@@ -423,6 +476,13 @@
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message summary span { flex:0 0 auto; font-weight:700; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message summary em { min-width:0; overflow:hidden; color:inherit; opacity:.78; font-size:10px; font-style:normal; text-overflow:ellipsis; white-space:nowrap; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content { padding:0 10px 9px; line-height:1.5; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content h1, #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content h2, #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content h3, #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content h4, #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content h5, #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content h6 { margin:8px 0 4px; line-height:1.3; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content ul, #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content ol { margin:4px 0 4px 20px; padding:0; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content blockquote { margin:6px 0; padding-left:9px; border-left:3px solid currentColor; opacity:.8; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content code { padding:1px 4px; border-radius:4px; background:rgba(0,0,0,.08); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content pre { margin:6px 0; padding:8px; overflow:auto; border-radius:6px; background:rgba(0,0,0,.1); }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content pre code { padding:0; background:transparent; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content a { color:inherit; text-decoration:underline; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-footer { display:grid; grid-template-columns:minmax(0,1fr) 54px; gap:7px; padding:10px; border-top:1px solid #e4efe9; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-storage-hint { grid-column:1 / -1; color:#8b9b94; font-size:10px; line-height:1.3; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-attachment-preview { grid-column:1 / -1; display:flex; align-items:center; gap:7px; padding:5px 7px; color:#426e62; background:#f6f9f7; border:1px solid #dcece7; border-radius:7px; font-size:10px; }
