@@ -450,6 +450,7 @@
       style.textContent = `
         #${AI_CHAT_PANEL_ID} { position:fixed; top:84px; left:12px; z-index:2147483645; display:flex; flex-direction:column; width:320px; height:430px; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px); min-width:260px; min-height:260px; resize:both; overflow:hidden; padding:0; color:#203e3b; background:#fff; border:1px solid #dcece7; border-radius:16px; box-shadow:0 12px 40px rgba(19,68,57,.18); font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
         #${AI_CHAT_PANEL_ID}.integrated { position:relative; top:auto; left:auto; z-index:auto; width:auto; height:auto; min-width:0; min-height:0; max-width:none; max-height:none; resize:none; border:0; border-radius:0; box-shadow:none; }
+        #${AI_CHAT_PANEL_ID}.integrated, #${AI_CHAT_PANEL_ID}.integrated .boss-auto-ai-chat-list { min-height:0; }
         #${AI_CHAT_PANEL_ID}.integrated.collapsed { width:42px; min-width:42px; height:100%; }
         #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-list, #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-footer { display:none; }
         #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-clear { display:none; }
@@ -464,7 +465,7 @@
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-header > div { display:flex; gap:5px; }
         #${AI_CHAT_PANEL_ID} button { border:1px solid #d5e5dd; border-radius:7px; cursor:pointer; font:inherit; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-clear { padding:4px 7px; color:#426e62; background:#fff; }
-        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-list { flex:1; overflow:auto; display:flex; flex-direction:column; gap:8px; padding:12px; background:#fbfdfc; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-list { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:8px; padding:12px; background:#fbfdfc; overscroll-behavior:contain; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-empty { margin:auto; color:#8b9b94; text-align:center; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message { max-width:88%; border-radius:10px; word-break:break-word; overflow:hidden; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-user { align-self:flex-end; color:#fff; background:#187a64; }
