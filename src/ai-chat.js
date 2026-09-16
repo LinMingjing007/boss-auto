@@ -20,7 +20,7 @@
       type: 'function',
       function: {
         name: 'update_user_config',
-        description: '修改当前配置版本中的求职筛选和 AI 设置。只在用户明确要求修改时调用。API Key 不在工具范围内。',
+        description: '修改当前配置版本中的求职筛选和 AI 判别规则。只在用户明确要求修改时调用。AI 接入配置不在工具范围内。',
         strict: true,
         parameters: {
           type: 'object',
@@ -30,7 +30,6 @@
             blockedWords: nullableString,
             resumePrompt: nullableString,
             aiPrompt: nullableString,
-            aiModel: nullableString,
             aiEnabled: nullableBoolean,
             aiFailurePolicy: { type: ['string', 'null'], enum: ['skip', 'keep', null] },
             onlineStatusMode: { type: ['string', 'null'], enum: ['不限', '状态筛选', null] },
@@ -38,7 +37,7 @@
               type: ['array', 'null'], items: { type: 'string' },
             },
           },
-          required: ['keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt', 'aiModel', 'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'selectedOnlineStatuses'],
+          required: ['keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt', 'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'selectedOnlineStatuses'],
           additionalProperties: false,
         },
       },
@@ -69,7 +68,7 @@
       const next = { ...current };
       const editableFields = [
         'keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt',
-        'aiModel', 'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'selectedOnlineStatuses',
+        'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'selectedOnlineStatuses',
       ];
       editableFields.forEach((field) => {
         if (changes[field] !== null && changes[field] !== undefined) next[field] = changes[field];
@@ -100,9 +99,6 @@
         selectedOnlineStatuses: config.selectedOnlineStatuses,
         unknownOnlineStatusPolicy: config.unknownOnlineStatusPolicy,
         aiEnabled: config.aiEnabled,
-        aiEndpoint: config.aiEndpoint,
-        aiModel: config.aiModel,
-        apiKeyConfigured: Boolean(config.aiApiKey),
         resumePrompt: config.resumePrompt,
         aiPrompt: config.aiPrompt,
         aiFailurePolicy: config.aiFailurePolicy,
@@ -183,7 +179,7 @@
 
       const systemContext = [
         '你是求职助手，请用中文回答用户问题。',
-        '需要了解当前配置时使用 read_user_config；当用户明确要求修改求职配置时使用 update_user_config；没有明确要求时不要修改配置。不要尝试修改 API Key。',
+        '需要了解当前配置时使用 read_user_config；当用户明确要求修改求职配置时使用 update_user_config；没有明确要求时不要修改配置。AI 接入配置（接口地址、模型和 API Key）不可读取、不可修改。',
         config.resumePrompt,
       ].filter(Boolean).join('\n\n');
       const controller = new AbortController();
