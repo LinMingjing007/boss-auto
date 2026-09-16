@@ -189,12 +189,6 @@
       }
     }
 
-    async function loadAttachment(event) {
-      const file = event.target.files?.[0];
-      event.target.value = '';
-      await processAttachment(file);
-    }
-
     function toggleCollapsed() {
       const collapsed = panel.classList.toggle('collapsed');
       const button = panel.querySelector('.boss-auto-ai-chat-collapse');
@@ -377,13 +371,11 @@
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message { max-width:88%; padding:8px 10px; border-radius:10px; word-break:break-word; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-user { align-self:flex-end; color:#fff; background:#187a64; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-assistant { align-self:flex-start; color:#29483d; background:#eef8f3; }
-        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-footer { display:grid; grid-template-columns:minmax(0,1fr) 54px 54px; gap:7px; padding:10px; border-top:1px solid #e4efe9; background:#fff; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-footer { display:grid; grid-template-columns:minmax(0,1fr) 54px; gap:7px; padding:10px; border-top:1px solid #e4efe9; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-storage-hint { grid-column:1 / -1; color:#8b9b94; font-size:10px; line-height:1.3; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-input { flex:1; min-width:0; min-height:38px; max-height:100px; resize:vertical; padding:8px 9px; color:#243e34; background:#f8faf9; border:1px solid #e1eae5; border-radius:8px; outline:none; font:inherit; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-input:focus { border-color:#21846a; background:#fff; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-send { width:54px; color:#fff; background:#187a64; border:0; }
-        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-file-button { display:flex; align-items:center; justify-content:center; width:54px; color:#426e62; background:#f6f9f7; }
-        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-file { display:none; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-send:disabled { opacity:.6; cursor:wait; }
         @media (max-width:900px) { #${AI_CHAT_PANEL_ID} { top:12px; left:12px; width:min(320px,calc(100vw - 24px)); } }
       `;
@@ -394,7 +386,7 @@
       panel.innerHTML = `
         <div class="boss-auto-ai-chat-header"><span class="boss-auto-ai-chat-title">AI 对话</span><div><button type="button" class="boss-auto-ai-chat-clear">清空</button><button type="button" class="boss-auto-ai-chat-collapse" title="收起 AI 对话" aria-label="收起 AI 对话" aria-expanded="true">−</button></div></div>
         <div class="boss-auto-ai-chat-list"><div class="boss-auto-ai-chat-empty">输入问题，开始和 AI 对话</div></div>
-        <div class="boss-auto-ai-chat-footer"><div class="boss-auto-ai-chat-storage-hint">支持 TXT、MD、JSON、CSV、HTML 及 JPEG/PNG/GIF/WebP 图片，单个文件最大 2MB</div><textarea class="boss-auto-ai-chat-input" rows="2" placeholder="输入消息，Enter 发送"></textarea><button type="button" class="boss-auto-ai-chat-file-button">文件</button><input class="boss-auto-ai-chat-file" type="file" accept=".txt,.md,.json,.csv,.html,.jpg,.jpeg,.png,.gif,.webp,text/plain,text/markdown,application/json,text/csv,text/html,image/jpeg,image/png,image/gif,image/webp"><button type="button" class="boss-auto-ai-chat-send">发送</button></div>
+        <div class="boss-auto-ai-chat-footer"><div class="boss-auto-ai-chat-storage-hint">可粘贴或拖拽 TXT、MD、JSON、CSV、HTML 及 JPEG/PNG/GIF/WebP 文件，单个文件最大 2MB</div><textarea class="boss-auto-ai-chat-input" rows="2" placeholder="输入消息，Enter 发送"></textarea><button type="button" class="boss-auto-ai-chat-send">发送</button></div>
       `;
       document.body.appendChild(panel);
       renderMessages();
@@ -405,8 +397,6 @@
         toggleCollapsed();
       });
       panel.querySelector('.boss-auto-ai-chat-send').addEventListener('click', sendMessage);
-      panel.querySelector('.boss-auto-ai-chat-file-button').addEventListener('click', () => panel.querySelector('.boss-auto-ai-chat-file').click());
-      panel.querySelector('.boss-auto-ai-chat-file').addEventListener('change', loadAttachment);
       const input = panel.querySelector('.boss-auto-ai-chat-input');
       input.addEventListener('paste', (event) => {
         const file = [...(event.clipboardData?.items || [])]
