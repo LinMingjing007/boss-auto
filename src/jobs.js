@@ -12,6 +12,19 @@
     let deliveryPaused = false;
     const jobRecords = [];
     let deliveryIndex = 0;
+    const scannedUrls = new Set();
+    const filteredUrls = new Set();
+
+    function publishStats() {
+      const clicked = jobRecords.filter((record) => record.status === 'clicked').length;
+      const failed = jobRecords.filter((record) => record.status === 'failed').length;
+      const skipped = jobRecords.filter((record) => record.status === 'skipped').length;
+      window.BossAutoLogInstance?.updateStats?.('jobs', {
+        total: scannedUrls.size, success: clicked, skipped: filteredUrls.size + skipped,
+        matched: jobRecords.length, failed,
+        pending: jobRecords.length - clicked - failed - skipped,
+      });
+    }
 
     function collectJobRecords() {
       const config = getConfig();
@@ -26,6 +39,7 @@
         const location = card.querySelector('.company-location');
         const url = name?.href;
         if (!name || !url || known.has(url)) return;
+        scannedUrls.add(url);
   
         const job = {
           url,
@@ -38,16 +52,19 @@
         };
   
         if (!isJobAllowed(job, config)) {
+          filteredUrls.add(url);
           skipped += 1;
           known.add(url);
           return;
         }
   
         jobRecords.push(job);
+        filteredUrls.delete(url);
         known.add(url);
         added += 1;
       });
   
+      publishStats();
       return { added, skipped, total: jobRecords.length };
     }
   
@@ -408,6 +425,7 @@
         record.status = 'failed';
         record.error = '找不到岗位卡片';
         deliveryIndex += 1;
+        publishStats();
         return;
       }
   
@@ -480,6 +498,7 @@
         }
         await randomDelay(800, 1800);
         chatButton.click();
+        record.status = 'clicked';
         await clickStayOnPage();
         await randomDelay(900, 2200);
         deliveryIndex += 1;
@@ -497,6 +516,7 @@
         console.error('[Boss Auto] delivery failed:', { record, error });
       } finally {
         deliveryRunning = false;
+        publishStats();
         if (button) button.textContent = deliveryPaused
           ? '继续投递' : (deliveryIndex < jobRecords.length ? '投递下一条' : '岗位队列已完成');
       }

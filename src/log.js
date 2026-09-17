@@ -9,10 +9,45 @@
     let list = null;
     let count = null;
     let resizeObserver = null;
+    let layoutResizeHandler = null;
+    let currentPage = 'jobs';
+    const taskStats = { jobs: {}, chat: {} };
+    function updateStats(page, values) {
+      if (!Object.hasOwn(taskStats, page)) return;
+      taskStats[page] = { ...taskStats[page], ...values };
+      renderStats();
+    }
+
+    function renderStats() {
+      const card = panel?.querySelector('.boss-auto-task-stats');
+      if (!card) return;
+      const stats = taskStats[currentPage];
+      const isJobs = currentPage === 'jobs';
+      const metrics = isJobs
+        ? [['total', '已扫描'], ['success', '已点击沟通'], ['skipped', '已跳过'], ['matched', '匹配职位']]
+        : [['total', '消息事件'], ['success', '已回复'], ['skipped', '已略过'], ['failed', '失败']];
+      const number = (key) => Math.max(0, Number(stats[key]) || 0);
+      const total = number('total');
+      const finished = number('success') + number('skipped') + number('failed');
+      const progress = total ? Math.min(100, Math.round(finished / total * 100)) : 0;
+      card.innerHTML = `<div class="boss-auto-stats-heading"><strong>任务统计</strong><span>${isJobs ? '职位任务' : '聊天监听'} · 本页累计</span></div>
+        <div class="boss-auto-stats-grid">${metrics.map(([key, label]) => `<div data-metric="${key}"><span>${label}</span><strong>${number(key)}</strong></div>`).join('')}</div>
+        <div class="boss-auto-stats-progress"><span>已处理 ${finished} / ${total}</span><span>待处理 ${number('pending')}${isJobs ? ` · 失败 ${number('failed')}` : ''}</span></div>
+        <progress max="100" value="${progress}" aria-label="任务处理进度"></progress>
+        <p>${isJobs ? '点击沟通不代表发送成功；扫描数按职位去重。' : '按消息变化事件计数；缓存命中或取消计为略过。'}</p>`;
+    }
     const shell = `:is(#${PANEL_ID}, #${CHAT_PANEL_ID}).boss-auto-unified-panel`;
 
     function installWorkspace(target) {
       if (target.querySelector('.boss-auto-layout-tools')) return;
+      const sizeKey = `boss-auto-window-size-${target.id}`;
+      try {
+        const saved = JSON.parse(localStorage.getItem(sizeKey));
+        if (Number.isFinite(saved?.width) && Number.isFinite(saved?.height)) {
+          target.style.width = `${Math.max(280, Math.min(saved.width, window.innerWidth - 24))}px`;
+          target.style.height = `${Math.max(240, Math.min(saved.height, window.innerHeight - 108))}px`;
+        }
+      } catch { /* Storage may be unavailable; keep the responsive default. */ }
       const header = target.querySelector('.boss-auto-panel-header, .chat-panel-header');
       if (target.id === CHAT_PANEL_ID) {
         const body = document.createElement('div');
@@ -88,6 +123,46 @@
       });
       apply();
       toolbar.querySelector('[data-layout="balanced"]').setAttribute('aria-pressed', 'true');
+      const grip = document.createElement('div');
+      grip.className = 'boss-auto-window-resize';
+      grip.title = '拖动调整窗口大小';
+      grip.setAttribute('aria-label', '调整窗口大小');
+      grip.setAttribute('role', 'separator');
+      grip.tabIndex = 0;
+      let sizing = null;
+      const setSize = (width, height) => {
+        const rect = target.getBoundingClientRect();
+        target.style.width = `${Math.max(280, Math.min(width, window.innerWidth - rect.left - 8))}px`;
+        target.style.height = `${Math.max(240, Math.min(height, window.innerHeight - rect.top - 8))}px`;
+      };
+      const saveSize = () => {
+        try { localStorage.setItem(sizeKey, JSON.stringify({ width:target.offsetWidth, height:target.offsetHeight })); } catch { /* Resizing still works without storage. */ }
+      };
+      grip.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = target.getBoundingClientRect();
+        sizing = { x:event.clientX, y:event.clientY, width:rect.width, height:rect.height };
+        target.style.left = `${rect.left}px`;
+        target.style.top = `${rect.top}px`;
+        target.style.right = 'auto';
+        target.style.bottom = 'auto';
+        grip.setPointerCapture(event.pointerId);
+      });
+      grip.addEventListener('pointermove', (event) => {
+        if (sizing) setSize(sizing.width + event.clientX - sizing.x, sizing.height + event.clientY - sizing.y);
+      });
+      grip.addEventListener('pointerup', () => { if (sizing) saveSize(); sizing = null; });
+      ['pointercancel', 'lostpointercapture'].forEach((name) => grip.addEventListener(name, () => { sizing = null; }));
+      grip.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+        event.preventDefault();
+        const rect = target.getBoundingClientRect();
+        setSize(rect.width + (event.key === 'ArrowLeft' ? -20 : event.key === 'ArrowRight' ? 20 : 0), rect.height + (event.key === 'ArrowUp' ? -20 : event.key === 'ArrowDown' ? 20 : 0));
+        saveSize();
+      });
+      target.appendChild(grip);
     }
 
     function render() {
@@ -169,7 +244,7 @@
       style.textContent += `
         ${shell} { --pane-0:1fr; --pane-1:1.08fr; --pane-2:1fr; --left-pane:minmax(200px,var(--pane-0)); --right-pane:minmax(200px,var(--pane-2));
           display:grid; grid-template-columns:var(--left-pane) 10px minmax(200px,var(--pane-1)) 10px var(--right-pane); grid-template-rows:58px minmax(0,1fr);
-          width:1120px; height:590px; min-width:660px; min-height:320px; max-width:calc(100vw - 24px); max-height:calc(100vh - 108px); padding:0;
+          width:min(880px,calc(100vw - 32px)); height:min(520px,calc(100dvh - 112px)); min-width:280px; min-height:240px; max-width:calc(100vw - 24px); max-height:calc(100dvh - 24px); padding:0; resize:none;
           border:1px solid #cbdedc; border-radius:16px; background:#fff; box-shadow:0 24px 80px #173d4826,0 3px 12px #173d4810; color:#203c40; color-scheme:light; }
         ${shell}, ${shell} * { box-sizing:border-box; scrollbar-width:thin; scrollbar-color:#ccddda transparent; }
         ${shell} > :is(.boss-auto-panel-header,.chat-panel-header) { grid-column:1 / -1; grid-row:1; margin:0; padding:10px 16px; background:linear-gradient(110deg,#eaf8f4,#f7fafc); border-bottom:1px solid #e4eeec; min-width:0; gap:12px; touch-action:none; }
@@ -206,6 +281,25 @@
         ${shell} .boss-auto-log-entry[data-type="success"]::before { background:#12a389; }
         ${shell} .boss-auto-log-entry[data-type="error"]::before { background:#ef795b; }
         ${shell} .boss-auto-log-entry[data-type="error"] span { color:#d9684b; }
+        ${shell} .boss-auto-task-stats { flex-shrink:0; margin:8px 12px 14px; padding:13px 12px 10px; border:1px solid #deeeea; border-radius:12px; background:linear-gradient(125deg,#f1faf6,#fafcfe); }
+        ${shell} .boss-auto-stats-heading, ${shell} .boss-auto-stats-progress { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+        ${shell} .boss-auto-stats-heading strong { color:#24524a; font-size:12px; }
+        ${shell} .boss-auto-stats-heading > span { color:#8a9e99; font-size:10px; }
+        ${shell} .boss-auto-stats-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); margin:16px 0 12px; text-align:center; }
+        ${shell} .boss-auto-stats-grid > div + div { border-left:1px solid #e0eeea; }
+        ${shell} .boss-auto-stats-grid span { display:block; color:#7e9291; font-size:10px; }
+        ${shell} .boss-auto-stats-grid strong { display:block; margin-top:5px; color:#226758; font:700 22px/1.2 ui-sans-serif,sans-serif; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+        ${shell} [data-metric="success"] strong { color:#10947d; }
+        ${shell} [data-metric="skipped"] strong, ${shell} [data-metric="failed"] strong { color:#d07d55; }
+        ${shell} [data-metric="matched"] strong { color:#5a78bf; }
+        ${shell} .boss-auto-stats-progress { font-size:10px; color:#78908b; }
+        ${shell} .boss-auto-task-stats progress { display:block; width:100%; height:4px; margin:7px 0; border:0; border-radius:3px; overflow:hidden; appearance:none; }
+        ${shell} .boss-auto-task-stats progress::-webkit-progress-bar { background:#e2eeea; }
+        ${shell} .boss-auto-task-stats progress::-webkit-progress-value { background:#47b29b; border-radius:3px; }
+        ${shell} .boss-auto-task-stats progress::-moz-progress-bar { background:#47b29b; }
+        ${shell} .boss-auto-task-stats p { margin:8px 0 0; color:#97a7a3; font-size:9px; line-height:1.5; }
+        ${shell} #${LOG_PANEL_ID}.collapsed .boss-auto-task-stats { display:none; }
+        ${shell}.compact > #${LOG_PANEL_ID}:not(.collapsed) { flex-basis:400px; }
         ${shell} .boss-auto-intro { font-size:14px; }
         ${shell} .boss-auto-description { margin:7px 0 10px; }
         ${shell} label { margin-bottom:9px; }
@@ -219,10 +313,11 @@
         ${shell} .divider-0 { grid-column:2; } ${shell} .divider-1 { grid-column:4; }
         ${shell} .boss-auto-divider span { position:absolute; top:48%; left:-6px; z-index:2; width:22px; height:30px; border:1px solid #d9e6f0; border-radius:10px; background:#fff; color:#6e87cb; text-align:center; font:17px/28px sans-serif; box-shadow:0 2px 6px #24435a0d; }
         ${shell} .boss-auto-divider:hover, ${shell} .boss-auto-divider.is-dragging { background:#dce9fc; }
+        ${shell} .boss-auto-window-resize { position:absolute; right:0; bottom:0; z-index:3; width:20px; height:20px; cursor:nwse-resize; touch-action:none; background:repeating-linear-gradient(135deg,transparent 0 3px,#9abeb3 3px 4px); clip-path:polygon(100% 15%,100% 100%,15% 100%); }
         ${shell} :focus-visible { outline:2px solid #6a9cdd; outline-offset:-2px; }
         ${shell}.ai-collapsed { --left-pane:42px; }
         ${shell}.log-collapsed { --right-pane:42px; }
-        ${shell}:is(.ai-collapsed,.log-collapsed) { width:1120px; grid-template-columns:var(--left-pane) 10px minmax(200px,var(--pane-1)) 10px var(--right-pane); }
+        ${shell}:is(.ai-collapsed,.log-collapsed) { width:min(880px,calc(100vw - 32px)); grid-template-columns:var(--left-pane) 10px minmax(200px,var(--pane-1)) 10px var(--right-pane); }
         ${shell}.ai-collapsed .divider-0, ${shell}.log-collapsed .divider-1 { visibility:hidden; }
         ${shell}.collapsed { display:block; width:190px !important; height:auto !important; min-width:190px; min-height:0; }
         ${shell}.collapsed > :not(.boss-auto-panel-header):not(.chat-panel-header), ${shell}.collapsed .boss-auto-layout-tools { display:none; }
@@ -248,10 +343,13 @@
           <div class="boss-auto-log-actions"><button type="button" class="boss-auto-log-clear">清空</button><button type="button" class="boss-auto-log-collapse" aria-expanded="true">−</button></div>
         </div>
         <div class="boss-auto-log-list"><div class="boss-auto-log-empty">暂无操作日志</div></div>
+        <section class="boss-auto-task-stats" aria-label="任务统计"></section>
       `;
       document.body.appendChild(panel);
       list = panel.querySelector('.boss-auto-log-list');
       count = panel.querySelector('.boss-auto-log-count');
+      currentPage = page;
+      renderStats();
       panel.querySelector('.boss-auto-log-clear').addEventListener('click', () => {
         entries.length = 0;
         render();
@@ -273,10 +371,14 @@
       count = null;
       resizeObserver?.disconnect();
       resizeObserver = null;
+      if (layoutResizeHandler) window.removeEventListener('resize', layoutResizeHandler);
+      layoutResizeHandler = null;
     }
 
     function setPage(page) {
       if (!panel) return;
+      currentPage = page;
+      renderStats();
       panel.classList.toggle('chat-position', page === 'chat');
     }
 
@@ -290,8 +392,20 @@
       const updateLayout = () => {
         if (!target.isConnected) return;
         target.classList.toggle('compact', target.getBoundingClientRect().width < 660);
+        const rect = target.getBoundingClientRect();
+        if (rect.right > window.innerWidth || rect.left < 0) {
+          target.style.left = `${Math.max(0, Math.min(rect.left, window.innerWidth - rect.width - 8))}px`;
+          target.style.right = 'auto';
+        }
+        if (rect.bottom > window.innerHeight || rect.top < 0) {
+          target.style.top = `${Math.max(0, Math.min(rect.top, window.innerHeight - rect.height - 8))}px`;
+          target.style.bottom = 'auto';
+        }
       };
       updateLayout();
+      if (layoutResizeHandler) window.removeEventListener('resize', layoutResizeHandler);
+      layoutResizeHandler = updateLayout;
+      window.addEventListener('resize', layoutResizeHandler);
       if (window.ResizeObserver) {
         resizeObserver?.disconnect();
         resizeObserver = new ResizeObserver(updateLayout);
@@ -299,6 +413,6 @@
       }
     }
 
-    return { add, createLogPanel, removeLogPanel, setPage, attachTo };
+    return { add, updateStats, createLogPanel, removeLogPanel, setPage, attachTo };
   };
 })();

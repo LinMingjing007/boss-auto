@@ -49,7 +49,7 @@
 
 
   const settings = window.BossAutoSettings({
-    PANEL_ID, SETTINGS_VIEW_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS, AI_MODEL_OPTIONS,
+    PANEL_ID, SETTINGS_VIEW_ID, STATUS_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS, AI_MODEL_OPTIONS,
     loadConfig: window.BossAutoStorage.loadConfig,
     saveConfig: window.BossAutoStorage.saveConfig,
     loadConfigStore: window.BossAutoStorage.loadConfigStore,

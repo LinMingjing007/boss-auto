@@ -562,9 +562,10 @@
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-header > div { display:flex; gap:5px; }
         #${AI_CHAT_PANEL_ID} button { border:1px solid #d5e5dd; border-radius:7px; cursor:pointer; font:inherit; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-clear { padding:4px 7px; color:#426e62; background:#fff; }
-        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-list { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:8px; padding:12px; background:#fbfdfc; overscroll-behavior:contain; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-list { flex:1 1 0; min-height:0; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:8px; padding:12px; background:#fbfdfc; overscroll-behavior:contain; touch-action:pan-y; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-empty { margin:auto; color:#8b9b94; text-align:center; }
-        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message { max-width:88%; border-radius:10px; word-break:break-word; overflow:hidden; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message { flex:0 0 auto; max-width:88%; border-radius:10px; word-break:break-word; overflow:hidden; }
+        #${AI_CHAT_PANEL_ID} :is(.boss-auto-ai-chat-header,.boss-auto-ai-chat-footer) { flex-shrink:0; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-user { align-self:flex-end; color:#fff; background:#187a64; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message.is-assistant { align-self:flex-start; color:#29483d; background:#eef8f3; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message summary { display:flex; align-items:center; gap:8px; min-width:150px; padding:8px 10px; cursor:pointer; list-style:none; }

@@ -17,6 +17,10 @@
     let chatMonitorRunId = 0;
     const chatCardSignatures = new Map();
     const chatProcessingKeys = new Set();
+    const taskStats = { total: 0, success: 0, skipped: 0, failed: 0 };
+    const publishStats = () => window.BossAutoLogInstance?.updateStats?.('chat', {
+      ...taskStats, pending: taskStats.total - taskStats.success - taskStats.skipped - taskStats.failed,
+    });
 
     function versionOptions(store) {
       return store.versions.map((version) => (
@@ -461,6 +465,7 @@
   
     async function processNewChat(snapshot, runId = chatMonitorRunId) {
       if (chatMonitorBusy) return;
+      taskStats.total += 1;
   
       const config = loadConfig();
       const sequence = config.messageSequence?.length
@@ -469,36 +474,44 @@
           ? [{ type: 'text', content: config.messageTemplate }]
           : []);
       if (!sequence.length) {
+        taskStats.skipped += 1;
+        publishStats();
         console.info('[Boss Auto] chat event skipped: empty message sequence', { snapshot });
         setStatus('检测到新消息，但消息序列为空', 'error');
         return;
       }
       const recordKey = getMessageRecordKey(snapshot);
       if (hasMessageRecord(snapshot) || chatProcessingKeys.has(recordKey)) {
+        taskStats.skipped += 1;
+        publishStats();
         console.info('[Boss Auto] chat event skipped: duplicate message record', { snapshot });
         return;
       }
   
       chatMonitorBusy = true;
+      publishStats();
       chatProcessingKeys.add(recordKey);
       try {
         await randomDelay(100, 400);
-        if (runId !== chatMonitorRunId) return;
+        if (runId !== chatMonitorRunId) { taskStats.skipped += 1; return; }
         clickChatCard(snapshot.card);
         const selected = await waitForSelectedChat(snapshot);
         if (!selected) throw new Error('联系人会话切换未完成');
         const sent = await sendMessageSequence(sequence, () => runId !== chatMonitorRunId);
-        if (!sent) return;
+        if (!sent) { taskStats.skipped += 1; return; }
         saveMessageRecord(snapshot);
+        taskStats.success += 1;
         setStatus(`已自动回复：${snapshot.message.slice(0, 24)}（${sequence.length} 条）`, 'success');
         console.info('[Boss Auto] new first chat message replied:', snapshot);
       } catch (error) {
+        taskStats.failed += 1;
         const position = Number.isInteger(error.sequencePosition) ? `（第 ${error.sequencePosition} 条）` : '';
         setStatus(`自动回复失败${position}：${error.message}`, 'error');
         console.error('[Boss Auto] auto reply failed:', { snapshot, error });
       } finally {
         chatProcessingKeys.delete(recordKey);
         chatMonitorBusy = false;
+        publishStats();
       }
     }
   

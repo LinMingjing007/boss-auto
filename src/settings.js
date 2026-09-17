@@ -3,7 +3,7 @@
 
   window.BossAutoSettings = function createSettingsModule(context) {
     const {
-      PANEL_ID, SETTINGS_VIEW_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS, AI_MODEL_OPTIONS,
+      PANEL_ID, SETTINGS_VIEW_ID, STATUS_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS, AI_MODEL_OPTIONS,
       loadConfig, saveConfig, handleImageFileSelection, setStatus, escapeHtml,
       jobBridge, loadConfigStore, saveConfigStore, setActiveVersion, isConfigSwitchLocked,
     } = context;
@@ -137,6 +137,72 @@
         #${SETTINGS_VIEW_ID} .boss-auto-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
         #${SETTINGS_VIEW_ID} .boss-auto-save-settings { color: #fff; background: #187a64; border-color: #187a64; }
         @media (max-width: 600px) { #${SETTINGS_VIEW_ID} { padding: 12px; } #${SETTINGS_VIEW_ID} .boss-auto-settings-card { padding: 16px; } #${SETTINGS_VIEW_ID} .boss-auto-message-row { grid-template-columns: 1fr; } }
+        #${SETTINGS_VIEW_ID} { z-index:2147483646; padding:32px; overflow:hidden; background:rgba(227,237,237,.86); backdrop-filter:blur(8px); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; color-scheme:light; }
+        #${SETTINGS_VIEW_ID}[hidden] { display:none; }
+        body:has(#${SETTINGS_VIEW_ID}:not([hidden])) #${STATUS_ID} { bottom:90px; }
+        #${SETTINGS_VIEW_ID}, #${SETTINGS_VIEW_ID} * { box-sizing:border-box; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-card { display:grid; grid-template-columns:176px minmax(0,1fr); grid-template-rows:82px minmax(0,1fr) 72px; width:100%; max-width:1060px; height:calc(100dvh - 64px); max-height:840px; padding:0; overflow:hidden; border-color:#d0e2dd; border-radius:20px; box-shadow:0 28px 90px #20433c26; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-head { grid-column:1 / -1; padding:20px 26px; background:linear-gradient(110deg,#edf9f4,#f8fbfc); border-bottom:1px solid #e2eeea; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-head h2 { color:#1d453f; font-size:19px; letter-spacing:.2px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-head p { margin:4px 0 0; color:#829994; font-size:11px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-nav { grid-column:1; grid-row:2; padding:24px 12px; background:#f6faf8; border-right:1px solid #e8f0ed; }
+        #${SETTINGS_VIEW_ID} .boss-auto-nav-caption { padding:0 12px 14px; color:#96a7a2; font-size:10px; letter-spacing:2px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-nav button { display:flex; align-items:center; gap:10px; width:100%; margin-bottom:6px; padding:12px; border:1px solid transparent; background:transparent; color:#6d8780; text-align:left; font-size:12px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-nav button span { font-size:10px; color:#9bafa8; font-variant-numeric:tabular-nums; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-nav button[aria-selected="true"] { color:#108674; background:#e5f3ec; border-color:#d3e9de; font-weight:650; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-content { grid-column:2; grid-row:2; overflow:auto; padding:22px 26px 28px; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:#cadbd3 transparent; }
+        #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar { margin:0 0 22px; padding:12px; gap:6px; background:#f5f9f7; border:1px solid #e5eeea; border-radius:12px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar label { flex-basis:180px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar label span { font-size:10px; color:#7c938b; }
+        #${SETTINGS_VIEW_ID} .boss-auto-version-toolbar button { min-height:34px; font-size:11px; padding:6px 8px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-section { margin:0 0 18px; padding:20px; border:1px solid #e1ece7; background:#fff; border-radius:13px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-section[hidden] { display:none; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-section h3 { display:flex; align-items:center; gap:9px; margin:0 0 10px; color:#294f43; font-size:14px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-settings-section h3::before { content:''; width:4px; height:14px; border-radius:2px; background:#66b99c; }
+        #${SETTINGS_VIEW_ID} .boss-auto-section-hint { margin:0 0 16px; color:#8b9c96; font-size:11px; }
+        #${SETTINGS_VIEW_ID} label { margin:14px 0; font-size:12px; }
+        #${SETTINGS_VIEW_ID} label > span { margin-bottom:7px; color:#546e63; font-size:12px; font-weight:550; }
+        #${SETTINGS_VIEW_ID} :is(input[type="text"],input[type="password"],textarea,select) { width:100%; min-width:0; min-height:39px; padding:9px 12px; color:#294b40; background:#f9fbfa; border:1px solid #dce8e1; border-radius:8px; outline:none; font:inherit; font-size:12px; line-height:1.6; transition:border-color .15s,box-shadow .15s; }
+        #${SETTINGS_VIEW_ID} :is(input,textarea,select):focus { border-color:#66b89a; box-shadow:0 0 0 3px #e6f5ed; background:#fff; }
+        #${SETTINGS_VIEW_ID} :is(input,textarea)::placeholder { color:#a1afa8; }
+        #${SETTINGS_VIEW_ID} textarea { min-height:100px; line-height:1.8; }
+        #${SETTINGS_VIEW_ID} .boss-auto-ai-toggle { justify-content:space-between; flex-direction:row-reverse; padding:12px 14px; margin-bottom:12px; color:#32725b; font-size:12px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-ai-toggle input { appearance:none; flex-shrink:0; width:34px; height:20px; padding:2px; border:0; border-radius:12px; background:#c8d7cf; cursor:pointer; }
+        #${SETTINGS_VIEW_ID} .boss-auto-ai-toggle input::before { content:''; display:block; width:16px; height:16px; border-radius:50%; background:white; box-shadow:0 1px 3px #234d3420; transition:transform .15s; }
+        #${SETTINGS_VIEW_ID} .boss-auto-ai-toggle input:checked { background:#21a182; }
+        #${SETTINGS_VIEW_ID} .boss-auto-ai-toggle input:checked::before { transform:translateX(14px); }
+        #${SETTINGS_VIEW_ID} .boss-auto-status-options, #${SETTINGS_VIEW_ID} .boss-auto-status-checkboxes { display:flex; flex-wrap:wrap; gap:8px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-status-options label { display:flex; align-items:center; gap:5px; padding:7px 10px; border:1px solid #e2ebe5; border-radius:7px; color:#769082; font-size:11px; cursor:pointer; }
+        #${SETTINGS_VIEW_ID} .boss-auto-status-options label:has(:checked) { border-color:#bbdccb; background:#eff8f3; color:#268465; }
+        #${SETTINGS_VIEW_ID} input:is([type="checkbox"],[type="radio"]) { accent-color:#159778; }
+        #${SETTINGS_VIEW_ID} .boss-auto-status-capability { display:block; margin-top:10px; color:#9baaa3; font-size:10px; }
+        #${SETTINGS_VIEW_ID} button { color:#607b6d; font-size:12px; transition:background .15s,border-color .15s; }
+        #${SETTINGS_VIEW_ID} button:hover { background:#f0f8f3; border-color:#bcd8c8; }
+        #${SETTINGS_VIEW_ID} button:focus-visible { outline:2px solid #54aa89; outline-offset:2px; }
+        #${SETTINGS_VIEW_ID} :is(.boss-auto-delete-version,.remove-message) { color:#ba7a6e; }
+        #${SETTINGS_VIEW_ID} .boss-auto-message-row { background:#f7faf8; border:1px solid #e7eee9; gap:8px; padding:12px; grid-template-columns:72px minmax(0,1fr) 34px 48px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-message-row button { padding:5px 7px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-message-row select { padding:7px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-message-list:empty::before { content:'还没有消息模板，添加第一条打招呼内容吧。'; display:block; padding:30px 16px; margin-bottom:14px; border:1px dashed #d7e6dc; border-radius:10px; color:#91a69a; text-align:center; font-size:12px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-actions { grid-column:1 / -1; grid-row:3; align-items:center; margin:0; padding:14px 26px; border-top:1px solid #e5eee8; background:#fff; }
+        #${SETTINGS_VIEW_ID} .boss-auto-save-note { margin-right:auto; color:#94a49a; font-size:11px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-actions button { min-width:88px; }
+        #${SETTINGS_VIEW_ID} .boss-auto-save-settings { color:#fff; background:#108674; border-color:#108674; box-shadow:0 3px 8px #1086741f; }
+        #${SETTINGS_VIEW_ID} .boss-auto-save-settings:hover { background:#0b7565; }
+        @media(max-width:700px) {
+          #${SETTINGS_VIEW_ID} { padding:10px; }
+          #${SETTINGS_VIEW_ID} .boss-auto-settings-card { height:calc(100dvh - 20px); max-height:none; grid-template-columns:minmax(0,1fr); grid-template-rows:74px 56px minmax(0,1fr) 68px; border-radius:14px; }
+          #${SETTINGS_VIEW_ID} .boss-auto-settings-head { padding:14px 16px; }
+          #${SETTINGS_VIEW_ID} .boss-auto-settings-nav { grid-column:1; grid-row:2; display:flex; gap:4px; padding:7px 10px; border:0; }
+          #${SETTINGS_VIEW_ID} .boss-auto-nav-caption, #${SETTINGS_VIEW_ID} .boss-auto-settings-nav button span { display:none; }
+          #${SETTINGS_VIEW_ID} .boss-auto-settings-nav button { justify-content:center; padding:8px; margin:0; }
+          #${SETTINGS_VIEW_ID} .boss-auto-settings-content { grid-column:1; grid-row:3; padding:14px; }
+          #${SETTINGS_VIEW_ID} .boss-auto-settings-section { padding:15px; }
+          #${SETTINGS_VIEW_ID} .boss-auto-actions { grid-row:4; padding:12px 14px; }
+          #${SETTINGS_VIEW_ID} .boss-auto-save-note { font-size:10px; max-width:110px; }
+          #${SETTINGS_VIEW_ID} .boss-auto-message-row { grid-template-columns:minmax(0,1fr); }
+        }
+        @media(prefers-reduced-motion:reduce) { #${SETTINGS_VIEW_ID} * { transition:none !important; } }
       `;
       document.head.appendChild(style);
   
@@ -146,7 +212,7 @@
       view.setAttribute('aria-label', 'Boss Auto 设置');
       view.innerHTML = `
         <div class="boss-auto-settings-card">
-          <div class="boss-auto-settings-head"><h2>Boss Auto 设置</h2><button type="button" class="boss-auto-close-settings">返回</button></div>
+          <div class="boss-auto-settings-head"><div><h2>偏好设置</h2><p>Boss Auto · 为你的下一份工作，做好准备</p></div><button type="button" class="boss-auto-close-settings">返回工作台</button></div>
           <div class="boss-auto-version-toolbar">
             <label><span>当前配置版本</span><select class="boss-auto-version-select">${versionOptions(store)}</select></label>
             <button type="button" class="boss-auto-new-version">新建版本</button>
@@ -195,10 +261,59 @@
             <button type="button" class="boss-auto-add-text">+ 添加文字</button>
             <button type="button" class="boss-auto-add-image">+ 添加图片</button>
           </div>
-          <div class="boss-auto-actions"><button type="button" class="boss-auto-close-settings">取消</button><button type="button" class="boss-auto-save-settings">保存设置</button></div>
+          <div class="boss-auto-actions"><span class="boss-auto-save-note" role="status">配置仅保存在当前浏览器</span><button type="button" class="boss-auto-close-settings">取消</button><button type="button" class="boss-auto-save-settings">保存设置</button></div>
         </div>
       `;
       document.body.appendChild(view);
+      const card = view.querySelector('.boss-auto-settings-card');
+      const content = document.createElement('div');
+      content.className = 'boss-auto-settings-content';
+      content.appendChild(view.querySelector('.boss-auto-version-toolbar'));
+      const sections = [...view.querySelectorAll('.boss-auto-settings-section')];
+      const nav = document.createElement('div');
+      nav.className = 'boss-auto-settings-nav';
+      nav.setAttribute('role', 'tablist');
+      nav.setAttribute('aria-label', '设置分类');
+      nav.innerHTML = '<div class="boss-auto-nav-caption">PREFERENCES</div>';
+      const groups = [
+        { title: '求职偏好', sections: [1, 2] },
+        { title: 'AI 助手', sections: [0, 3] },
+        { title: '聊天消息', sections: [4] },
+      ];
+      groups.forEach((group, index) => {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.id = `${SETTINGS_VIEW_ID}-tab-${index}`;
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-controls', `${SETTINGS_VIEW_ID}-group-${index}`);
+        tab.innerHTML = `<span>0${index + 1}</span>${group.title}`;
+        const pane = document.createElement('div');
+        pane.id = `${SETTINGS_VIEW_ID}-group-${index}`;
+        pane.setAttribute('role', 'tabpanel');
+        pane.setAttribute('aria-labelledby', tab.id);
+        group.sections.forEach((position) => pane.appendChild(sections[position]));
+        content.appendChild(pane);
+        nav.appendChild(tab);
+        tab.addEventListener('click', () => {
+          nav.querySelectorAll('[role="tab"]').forEach((button) => {
+            const selected = button === tab;
+            button.setAttribute('aria-selected', String(selected));
+            button.tabIndex = selected ? 0 : -1;
+            view.querySelector(`#${button.getAttribute('aria-controls')}`).hidden = !selected;
+          });
+          content.scrollTop = 0;
+        });
+        tab.addEventListener('keydown', (event) => {
+          if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          const next = event.key === 'Home' ? 0 : event.key === 'End' ? 2 : (index + (['ArrowUp', 'ArrowLeft'].includes(event.key) ? 2 : 1)) % 3;
+          const button = nav.querySelectorAll('button')[next];
+          button.click();
+          button.focus();
+        });
+      });
+      card.append(nav, content);
+      nav.querySelector('button').click();
       const recreateVersionView = () => {
         settingsViewDirty = false;
         view.remove();
@@ -273,7 +388,11 @@
         setStatus(`已删除配置版本：${current.versionName}`, 'success');
         recreateVersionView();
       });
-      const markSettingsDirty = () => { settingsViewDirty = true; };
+      const markSettingsDirty = () => {
+        settingsViewDirty = true;
+        view.querySelector('.boss-auto-save-note').textContent = '有未保存的修改';
+      };
+      view.addEventListener('input', markSettingsDirty);
       const aiToggle = view.querySelector('[name="aiEnabled"]');
       const aiDetails = view.querySelector('.boss-auto-ai-details');
       const updateAiDetailsVisibility = () => { aiDetails.hidden = !aiToggle.checked; };
