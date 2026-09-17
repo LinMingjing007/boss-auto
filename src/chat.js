@@ -114,7 +114,7 @@
         const interactive = target?.closest?.('button, input, textarea, select, a, label, .boss-auto-log-list, .boss-auto-ai-chat-list');
         const rect = panel.getBoundingClientRect();
         const inResizeHandle = event.clientX >= rect.right - 20 && event.clientY >= rect.bottom - 20;
-        if (interactive || inResizeHandle) return;
+        if (event.button !== 0 || !header.contains(target) || interactive || inResizeHandle) return;
 
         dragging = true;
         dragOffsetX = event.clientX - rect.left;

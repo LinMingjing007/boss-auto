@@ -546,7 +546,7 @@
       style.id = `${AI_CHAT_PANEL_ID}-style`;
       style.textContent = `
         #${AI_CHAT_PANEL_ID} { position:fixed; top:84px; left:12px; z-index:2147483645; display:flex; flex-direction:column; width:320px; height:430px; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px); min-width:260px; min-height:260px; resize:both; overflow:hidden; padding:0; color:#203e3b; background:#fff; border:1px solid #dcece7; border-radius:16px; box-shadow:0 12px 40px rgba(19,68,57,.18); font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-        #${AI_CHAT_PANEL_ID}.integrated { position:relative; top:auto; left:auto; z-index:auto; width:auto; height:auto; min-width:0; min-height:0; max-width:none; max-height:none; resize:none; border:0; border-radius:0; box-shadow:none; }
+        #${AI_CHAT_PANEL_ID}.integrated { position:relative; top:auto; left:auto; z-index:auto; width:auto; height:100%; min-width:0; min-height:0; max-width:none; max-height:100%; resize:none; overflow:hidden; border:0; border-radius:0; box-shadow:none; }
         #${AI_CHAT_PANEL_ID}.integrated, #${AI_CHAT_PANEL_ID}.integrated .boss-auto-ai-chat-list { min-height:0; }
         #${AI_CHAT_PANEL_ID}.integrated.collapsed { width:42px; min-width:42px; height:100%; }
         #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-list, #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-footer { display:none; }

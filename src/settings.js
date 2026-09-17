@@ -432,8 +432,8 @@
           <button type="button" class="boss-auto-collapse" aria-label="收起面板" aria-expanded="true" aria-controls="boss-auto-fields">−</button>
         </div>
         <div class="boss-auto-panel-body" id="boss-auto-fields">
-          <div class="boss-auto-intro"><span>职位偏好</span><small>仅配置</small></div>
-          <p class="boss-auto-description">当前版本配置仅供查看；如需修改，请打开“设置”。</p>
+          <div class="boss-auto-intro"><span>投递设置</span><small>当前方案</small></div>
+          <p class="boss-auto-description">确认你的求职偏好，让每一次投递更合适。</p>
           <label>
             <span>配置版本</span>
             <select class="boss-auto-version-select" style="display:block;width:100%;height:42px;padding:0 12px;border:1px solid #e1eae5;border-radius:10px;color:#243e34;background:#f8faf9;font:inherit;">
@@ -452,9 +452,9 @@
             <span>屏蔽词</span>
             <input name="blockedWords" value="${escapeHtml(config.blockedWords)}" placeholder="例如：销售-客服-外包" readonly aria-readonly="true">
           </label>
-          <div class="boss-auto-hint">多个条件用 <b>-</b> 分隔 · 留空表示不限</div>
+          <div class="boss-auto-hint">留空表示不限 · 点击下方设置修改条件</div>
           <button type="button" class="boss-auto-start">开始投递</button>
-          <div class="boss-auto-footer">保存在当前浏览器 · 自动化尚未启用</div>
+          <div class="boss-auto-footer">配置保存在当前浏览器</div>
         </div>
       `;
       document.body.appendChild(panel);
@@ -481,7 +481,7 @@
         const interactive = target?.closest?.('button, input, textarea, select, a, label, .boss-auto-log-list, .boss-auto-ai-chat-list');
         const rect = panel.getBoundingClientRect();
         const inResizeHandle = event.clientX >= rect.right - 20 && event.clientY >= rect.bottom - 20;
-        if (interactive || inResizeHandle) return;
+        if (event.button !== 0 || !header.contains(target) || interactive || inResizeHandle) return;
 
         dragging = true;
         dragOffsetX = event.clientX - rect.left;
