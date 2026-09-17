@@ -2,6 +2,14 @@
 
 Boss 直聘网页自动化辅助脚本，适用于职位列表页和聊天页。
 
+[![AtomGit G-Star](https://atomgit.com/gcw_r7Og3ygT/boss-auto/star/new_badge.svg)](https://atomgit.com/gcw_r7Og3ygT/boss-auto)
+
+项目托管于 [AtomGit](https://atomgit.com/gcw_r7Og3ygT/boss-auto)，并按 [G-Star 项目入驻指南](https://atomgit.com/GitCode/G-Star_guiding) 添加 AtomGit 项目标识，用于 G-Star 认证申请。
+
+## 开源协议
+
+本项目采用 [MIT License](LICENSE) 协议发布。
+
 ## 现有功能
 
 ### 职位列表页
