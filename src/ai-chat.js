@@ -153,14 +153,54 @@
       const codeBlocks = [];
       html = html.replace(/```([\w-]*)\n?([\s\S]*?)```/g, (match, language, code) => {
         const index = codeBlocks.push(`<pre><code${language ? ` data-language="${language}"` : ''}>${code.replace(/\n$/, '')}</code></pre>`) - 1;
-        return `\n@@BOSS_AUTO_CODE_${index}@@\n`;
+        return `\n@@BOSSAUTOCODE${index}@@\n`;
       });
-      html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-      html = html.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-      html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-      html = html.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
-      html = html.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
-      html = html.replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1<em>$2</em>');
+      const inline = (text) => text
+        .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+        .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+        .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+        .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1<em>$2</em>');
+      const splitRow = (line) => {
+        const text = line.trim();
+        const cells = [];
+        let cell = '';
+        let code = false;
+        for (let index = 0; index < text.length; index += 1) {
+          const char = text[index];
+          if (char === '\\' && text[index + 1] === '|') { cell += '|'; index += 1; continue; }
+          if (char === '`') code = !code;
+          if (char === '|' && !code) { cells.push(cell.trim()); cell = ''; }
+          else cell += char;
+        }
+        cells.push(cell.trim());
+        if (text.startsWith('|')) cells.shift();
+        if (text.endsWith('|') && cells.at(-1) === '') cells.pop();
+        return cells;
+      };
+      const tableLines = html.split('\n');
+      const tableBlocks = [];
+      const remainingLines = [];
+      for (let index = 0; index < tableLines.length; index += 1) {
+        const headers = splitRow(tableLines[index]);
+        const separators = splitRow(tableLines[index + 1] || '');
+        if (!tableLines[index].includes('|') || headers.length !== separators.length
+          || !separators.length || !separators.every((cell) => /^:?-{3,}:?$/.test(cell))) {
+          remainingLines.push(tableLines[index]);
+          continue;
+        }
+        const alignments = separators.map((cell) => cell.startsWith(':') && cell.endsWith(':') ? 'center' : cell.endsWith(':') ? 'right' : 'left');
+        const row = (cells, tag) => `<tr>${headers.map((_, column) => `<${tag}${tag === 'th' ? ' scope="col"' : ''} style="text-align:${alignments[column]}">${inline(cells[column] || '')}</${tag}>`).join('')}</tr>`;
+        index += 1;
+        const body = [];
+        while (index + 1 < tableLines.length && tableLines[index + 1].trim() && tableLines[index + 1].includes('|')) {
+          body.push(row(splitRow(tableLines[++index]), 'td'));
+        }
+        const block = tableBlocks.push(`<div class="boss-auto-table-scroll" role="region" aria-label="AI 回复表格，可横向滚动" tabindex="0"><table><thead>${row(headers, 'th')}</thead><tbody>${body.join('')}</tbody></table></div>`) - 1;
+        remainingLines.push(`@@BOSSAUTOTABLE${block}@@`);
+      }
+      html = inline(remainingLines.join('\n'));
       html = html.replace(/^(#{1,6})\s+(.+)$/gm, (match, hashes, title) => `<h${hashes.length}>${title}</h${hashes.length}>`);
       html = html.replace(/^>\s?(.*)$/gm, '<blockquote>$1</blockquote>');
 
@@ -192,8 +232,11 @@
         .replace(/\n{2,}/g, '<br><br>')
         .replace(/\n/g, '<br>');
       codeBlocks.forEach((block, index) => {
-        html = html.replace(new RegExp(`<br>@@BOSS_AUTO_CODE_${index}@@<br>`), block);
-        html = html.replace(new RegExp(`@@BOSS_AUTO_CODE_${index}@@`), block);
+        html = html.replace(`<br>@@BOSSAUTOCODE${index}@@<br>`, () => block);
+        html = html.replace(`@@BOSSAUTOCODE${index}@@`, () => block);
+      });
+      tableBlocks.forEach((block, index) => {
+        html = html.replace(`@@BOSSAUTOTABLE${index}@@`, () => block);
       });
       return html;
     }
@@ -238,8 +281,8 @@
       messages.push({ role: 'assistant', content: request.question, displayContent: request.question, askUser: request });
       renderMessages();
       addLog(`AI 正在询问用户：${request.question.slice(0, 80)}`);
-      return new Promise((resolve) => {
-        pendingAskUser = { resolve };
+      return new Promise((resolve, reject) => {
+        pendingAskUser = { resolve, reject };
       });
     }
 
@@ -414,6 +457,7 @@
       const systemContext = [
         '你是求职助手，请用中文回答用户问题。',
         '需要了解当前配置时使用 read_user_config；当用户明确要求修改求职配置时使用 update_user_config；没有明确要求时不要修改配置。AI 接入配置（接口地址、模型和 API Key）不可读取、不可修改。',
+        '工具执行失败时会返回包含 ok:false 和 error 的 JSON 工具结果。请根据错误自行决定修正参数后再次调用、询问用户补充信息，或停止尝试并说明原因。不要把失败说成成功，也不要重复执行已经成功且不需要再次执行的操作。',
         config.resumePrompt,
       ].filter(Boolean).join('\n\n');
       try {
@@ -450,6 +494,9 @@
           const data = await response.json();
           const responseMessage = data?.choices?.[0]?.message;
           const toolCalls = responseMessage?.tool_calls || [];
+          if (!Array.isArray(toolCalls) || toolCalls.some((call) => typeof call?.id !== 'string' || !call.id)) {
+            throw new Error('AI 工具调用格式不完整，缺少有效的 tool_call_id');
+          }
           if (!toolCalls.length) {
             const answer = responseMessage?.content;
             if (!answer) throw new Error('AI 接口未返回内容');
@@ -464,16 +511,25 @@
           });
           for (const toolCall of toolCalls) {
             let result;
-            if (toolCall?.function?.name === 'update_user_config') {
-              result = updateUserConfig(toolCall.function.arguments);
-            } else if (toolCall?.function?.name === 'read_user_config') {
-              result = `当前配置：\n${readUserConfig()}`;
-            } else if (toolCall?.function?.name === 'ask_user') {
-              result = await requestUserAnswer(toolCall.function.arguments);
-            } else {
-              throw new Error('AI 返回了不支持的工具');
+            const toolName = toolCall?.function?.name;
+            try {
+              if (toolName === 'update_user_config') {
+                result = updateUserConfig(toolCall.function.arguments);
+              } else if (toolName === 'read_user_config') {
+                result = `当前配置：\n${readUserConfig()}`;
+              } else if (toolName === 'ask_user') {
+                result = await requestUserAnswer(toolCall.function.arguments);
+              } else {
+                throw new Error('AI 返回了不支持的工具');
+              }
+              addLog(toolName === 'read_user_config' ? 'AI 读取了当前配置' : toolName === 'ask_user' ? 'AI 已收到用户选择' : result, 'success');
+            } catch (error) {
+              // User cancellation ends the turn; ordinary tool errors go back to the model.
+              if (error?.code === 'USER_CANCELLED') throw error;
+              const message = error instanceof Error ? error.message : String(error);
+              result = JSON.stringify({ ok: false, error: message });
+              addLog(`工具 ${toolName || '未知工具'} 执行失败，已反馈给 AI：${message}`, 'error');
             }
-            addLog(toolCall.function.name === 'read_user_config' ? 'AI 读取了当前配置' : toolCall.function.name === 'ask_user' ? 'AI 已收到用户选择' : result, 'success');
             conversation.push({ role: 'tool', tool_call_id: toolCall.id, content: result });
           }
         }
@@ -487,7 +543,6 @@
         } else {
           const message = error.name === 'AbortError' ? 'AI 请求超时' : error.message;
           setStatus(`AI 对话失败：${message}`, 'error');
-          addLog(`AI 对话失败：${message}`, 'error');
         }
       } finally {
         busy = false;
@@ -582,6 +637,14 @@
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content pre { margin:6px 0; padding:8px; overflow:auto; border-radius:6px; background:rgba(0,0,0,.1); }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content pre code { padding:0; background:transparent; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-message-content a { color:inherit; text-decoration:underline; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-table-scroll { max-width:100%; margin:8px 0; overflow-x:auto; border:1px solid #d7e9e1; border-radius:9px; background:#fff; overscroll-behavior-x:contain; touch-action:pan-x pan-y; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-table-scroll table { width:100%; min-width:360px; border-collapse:collapse; font:inherit; font-size:12px; line-height:1.65; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-table-scroll :is(th,td) { min-width:100px; max-width:340px; padding:9px 12px; border-right:1px solid #e4eee9; border-bottom:1px solid #e4eee9; vertical-align:top; overflow-wrap:anywhere; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-table-scroll th { background:#e4f3ed; color:#296452; font-weight:650; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-table-scroll tr:nth-child(even) td { background:#f5faf7; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-table-scroll tr:last-child td { border-bottom:0; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-table-scroll :is(th,td):last-child { border-right:0; }
+        #${AI_CHAT_PANEL_ID} .boss-auto-table-scroll:focus-visible { outline:2px solid #66b89a; outline-offset:2px; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-options { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-option, #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-other-submit { width:auto; min-height:28px; padding:4px 9px; color:#187a64; background:#fff; border:1px solid #b9ded0; border-radius:7px; cursor:pointer; font:inherit; }
         #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-option:hover, #${AI_CHAT_PANEL_ID} .boss-auto-ai-chat-ask-other-submit:hover { background:#eaf8f1; }
