@@ -56,20 +56,64 @@
           .forEach((child) => body.appendChild(child));
         target.appendChild(body);
       }
+      const settingsBody = target.querySelector('.boss-auto-panel-body');
+      let settingsHead = settingsBody.querySelector('.boss-auto-intro');
+      if (!settingsHead) {
+        settingsHead = document.createElement('div');
+        settingsHead.className = 'boss-auto-intro';
+        settingsHead.innerHTML = '<span>聊天配置</span>';
+        settingsBody.prepend(settingsHead);
+      }
+      const settingsCollapse = document.createElement('button');
+      settingsCollapse.type = 'button';
+      settingsCollapse.className = 'boss-auto-settings-collapse';
+      settingsCollapse.textContent = '−';
+      settingsCollapse.setAttribute('aria-label', '收起配置');
+      settingsCollapse.setAttribute('aria-expanded', 'true');
+      settingsHead.appendChild(settingsCollapse);
+      settingsCollapse.addEventListener('click', () => {
+        const collapsed = settingsBody.classList.toggle('collapsed');
+        target.classList.toggle('settings-collapsed', collapsed);
+        settingsCollapse.textContent = collapsed ? '+' : '−';
+        settingsCollapse.setAttribute('aria-label', collapsed ? '展开配置' : '收起配置');
+        settingsCollapse.setAttribute('aria-expanded', String(!collapsed));
+      });
       const toolbar = document.createElement('div');
       toolbar.className = 'boss-auto-layout-tools';
       toolbar.setAttribute('aria-label', '面板布局');
       toolbar.innerHTML = '<span>工作台</span><button type="button" data-layout="balanced" title="恢复均衡三栏">均衡</button><button type="button" data-layout="ai">AI 对话</button><button type="button" data-layout="settings">配置</button><button type="button" data-layout="log">日志</button>';
       header.insertBefore(toolbar, header.lastElementChild);
       let weights = [1, 1.08, 1];
+      const expandedWidths = [280, 300, 280];
       const presets = { balanced: [1, 1.08, 1], ai: [2, 1, 1], settings: [1, 2, 1], log: [1, 1, 2] };
       const apply = () => {
         weights.forEach((value, index) => target.style.setProperty(`--pane-${index}`, `${value}fr`));
       };
+      // Measure before the side panel's own click handler changes its collapsed class.
+      target.addEventListener('click', (event) => {
+        const button = event.target.closest?.('.boss-auto-ai-chat-collapse, .boss-auto-log-collapse, .boss-auto-settings-collapse');
+        if (!button || target.classList.contains('collapsed')) return;
+        if (target.classList.contains('compact') && !target.classList.contains('side-fit')) return;
+        const panes = [target.querySelector(`#${AI_CHAT_PANEL_ID}`), target.querySelector('.boss-auto-panel-body'), panel];
+        if (panes.some((pane) => !pane)) return;
+        const index = button.classList.contains('boss-auto-ai-chat-collapse') ? 0 : button.classList.contains('boss-auto-settings-collapse') ? 1 : 2;
+        const opening = panes[index].classList.contains('collapsed');
+        panes.forEach((pane, position) => {
+          if (!pane.classList.contains('collapsed')) expandedWidths[position] = pane.getBoundingClientRect().width;
+        });
+        const nextWidth = 22 + panes.reduce((sum, pane, position) => {
+          const closed = position === index ? !opening : pane.classList.contains('collapsed');
+          return sum + (closed ? 42 : expandedWidths[position]);
+        }, 0);
+        target.style.width = `${Math.min(window.innerWidth - 24, nextWidth)}px`;
+        weights = [...expandedWidths];
+        apply();
+        target.classList.add('side-fit');
+      }, true);
       toolbar.addEventListener('click', (event) => {
         const mode = event.target.dataset.layout;
         if (!presets[mode]) return;
-        target.querySelectorAll(`#${AI_CHAT_PANEL_ID}.collapsed .boss-auto-ai-chat-collapse, #${LOG_PANEL_ID}.collapsed .boss-auto-log-collapse`)
+        target.querySelectorAll(`#${AI_CHAT_PANEL_ID}.collapsed .boss-auto-ai-chat-collapse, #${LOG_PANEL_ID}.collapsed .boss-auto-log-collapse, .boss-auto-panel-body.collapsed .boss-auto-settings-collapse`)
           .forEach((button) => button.click());
         weights = [...presets[mode]];
         apply();
@@ -86,12 +130,16 @@
         divider.innerHTML = '<span aria-hidden="true">↔</span>';
         let drag = null;
         const resize = (delta, initial) => {
-          const total = initial[index] + initial[index + 1];
+          const panes = [target.querySelector(`#${AI_CHAT_PANEL_ID}`), settingsBody, panel];
+          const leftIndex = [0, 1, 2].filter((position) => position <= index && !panes[position]?.classList.contains('collapsed')).at(-1);
+          const rightIndex = [0, 1, 2].find((position) => position > index && !panes[position]?.classList.contains('collapsed'));
+          if (leftIndex === undefined || rightIndex === undefined) return;
+          const total = initial[leftIndex] + initial[rightIndex];
           const minimum = Math.min(200, total / 2);
-          const left = Math.max(minimum, Math.min(total - minimum, initial[index] + delta));
+          const left = Math.max(minimum, Math.min(total - minimum, initial[leftIndex] + delta));
           weights = [...initial];
-          weights[index] = left;
-          weights[index + 1] = total - left;
+          weights[leftIndex] = left;
+          weights[rightIndex] = total - left;
           apply();
           toolbar.querySelectorAll('button').forEach((button) => button.setAttribute('aria-pressed', 'false'));
           divider.setAttribute('aria-valuenow', String(Math.round(left / total * 100)));
@@ -123,10 +171,12 @@
       });
       apply();
       toolbar.querySelector('[data-layout="balanced"]').setAttribute('aria-pressed', 'true');
+      const directions = { n:'上边', s:'下边', w:'左边', e:'右边', nw:'左上角', ne:'右上角', sw:'左下角', se:'右下角' };
+      Object.entries(directions).forEach(([direction, label]) => {
       const grip = document.createElement('div');
-      grip.className = 'boss-auto-window-resize';
-      grip.title = '拖动调整窗口大小';
-      grip.setAttribute('aria-label', '调整窗口大小');
+      grip.className = `boss-auto-window-resize resize-${direction}`;
+      grip.title = `拖动${label}调整窗口大小`;
+      grip.setAttribute('aria-label', `调整窗口${label}`);
       grip.setAttribute('role', 'separator');
       grip.tabIndex = 0;
       let sizing = null;
@@ -143,7 +193,7 @@
         event.preventDefault();
         event.stopPropagation();
         const rect = target.getBoundingClientRect();
-        sizing = { x:event.clientX, y:event.clientY, width:rect.width, height:rect.height };
+        sizing = { x:event.clientX, y:event.clientY, left:rect.left, top:rect.top, width:rect.width, height:rect.height };
         target.style.left = `${rect.left}px`;
         target.style.top = `${rect.top}px`;
         target.style.right = 'auto';
@@ -151,7 +201,13 @@
         grip.setPointerCapture(event.pointerId);
       });
       grip.addEventListener('pointermove', (event) => {
-        if (sizing) setSize(sizing.width + event.clientX - sizing.x, sizing.height + event.clientY - sizing.y);
+        if (!sizing) return;
+        const dx = event.clientX - sizing.x;
+        const dy = event.clientY - sizing.y;
+        if (direction.includes('w')) target.style.left = `${Math.max(0, Math.min(sizing.left + dx, sizing.left + sizing.width - 280))}px`;
+        if (direction.includes('n')) target.style.top = `${Math.max(0, Math.min(sizing.top + dy, sizing.top + sizing.height - 240))}px`;
+        setSize(direction.includes('w') ? sizing.left + sizing.width - parseFloat(target.style.left) : sizing.width + (direction.includes('e') ? dx : 0),
+          direction.includes('n') ? sizing.top + sizing.height - parseFloat(target.style.top) : sizing.height + (direction.includes('s') ? dy : 0));
       });
       grip.addEventListener('pointerup', () => { if (sizing) saveSize(); sizing = null; });
       ['pointercancel', 'lostpointercapture'].forEach((name) => grip.addEventListener(name, () => { sizing = null; }));
@@ -163,6 +219,7 @@
         saveSize();
       });
       target.appendChild(grip);
+      });
     }
 
     function render() {
@@ -242,8 +299,8 @@
         @media (max-width: 900px) { #${PANEL_ID}.boss-auto-unified-panel, #${CHAT_PANEL_ID}.boss-auto-unified-panel { display: block; width: min(100vw - 24px, 420px); max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto; } #${PANEL_ID}.boss-auto-unified-panel.log-collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.log-collapsed, #${PANEL_ID}.boss-auto-unified-panel.ai-collapsed, #${CHAT_PANEL_ID}.boss-auto-unified-panel.ai-collapsed { width: min(100vw - 24px, 378px); } #${LOG_PANEL_ID}.integrated { border-top: 1px solid #e4efe9; border-left: 0; } #${LOG_PANEL_ID}.integrated .boss-auto-log-list { height: 260px; } #${LOG_PANEL_ID}.integrated.collapsed { width: 100%; height: 42px; min-width: 0; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-header { min-height: 42px; height: 42px; flex-direction: row; align-items: center; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-title { writing-mode: horizontal-tb; } #${LOG_PANEL_ID}.integrated.collapsed .boss-auto-log-collapse { margin-top: 0; margin-left: auto; } #${AI_CHAT_PANEL_ID}.integrated { width: 100%; min-height: 0; height: 360px; } #${AI_CHAT_PANEL_ID}.integrated.collapsed { width: 100%; height: 42px; min-width: 0; } #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-header { min-height: 42px; height: 42px; flex-direction: row; align-items: center; } #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-title { writing-mode: horizontal-tb; } #${AI_CHAT_PANEL_ID}.integrated.collapsed .boss-auto-ai-chat-collapse { margin-top: 0; margin-left: auto; } }
       `;
       style.textContent += `
-        ${shell} { --pane-0:1fr; --pane-1:1.08fr; --pane-2:1fr; --left-pane:minmax(200px,var(--pane-0)); --right-pane:minmax(200px,var(--pane-2));
-          display:grid; grid-template-columns:var(--left-pane) 10px minmax(200px,var(--pane-1)) 10px var(--right-pane); grid-template-rows:58px minmax(0,1fr);
+        ${shell} { --pane-0:1fr; --pane-1:1.08fr; --pane-2:1fr; --left-pane:minmax(200px,var(--pane-0)); --middle-pane:minmax(200px,var(--pane-1)); --right-pane:minmax(200px,var(--pane-2));
+          display:grid; grid-template-columns:var(--left-pane) 10px var(--middle-pane) 10px var(--right-pane); grid-template-rows:58px minmax(0,1fr);
           width:min(880px,calc(100vw - 32px)); height:min(520px,calc(100dvh - 112px)); min-width:280px; min-height:240px; max-width:calc(100vw - 24px); max-height:calc(100dvh - 24px); padding:0; resize:none;
           border:1px solid #cbdedc; border-radius:16px; background:#fff; box-shadow:0 24px 80px #173d4826,0 3px 12px #173d4810; color:#203c40; color-scheme:light; }
         ${shell}, ${shell} * { box-sizing:border-box; scrollbar-width:thin; scrollbar-color:#ccddda transparent; }
@@ -313,12 +370,34 @@
         ${shell} .divider-0 { grid-column:2; } ${shell} .divider-1 { grid-column:4; }
         ${shell} .boss-auto-divider span { position:absolute; top:48%; left:-6px; z-index:2; width:22px; height:30px; border:1px solid #d9e6f0; border-radius:10px; background:#fff; color:#6e87cb; text-align:center; font:17px/28px sans-serif; box-shadow:0 2px 6px #24435a0d; }
         ${shell} .boss-auto-divider:hover, ${shell} .boss-auto-divider.is-dragging { background:#dce9fc; }
-        ${shell} .boss-auto-window-resize { position:absolute; right:0; bottom:0; z-index:3; width:20px; height:20px; cursor:nwse-resize; touch-action:none; background:repeating-linear-gradient(135deg,transparent 0 3px,#9abeb3 3px 4px); clip-path:polygon(100% 15%,100% 100%,15% 100%); }
+        ${shell} .boss-auto-window-resize { position:absolute; z-index:4; touch-action:none; }
+        ${shell} :is(.resize-n,.resize-s) { left:14px; right:14px; height:6px; cursor:ns-resize; }
+        ${shell} :is(.resize-e,.resize-w) { top:14px; bottom:14px; width:6px; cursor:ew-resize; }
+        ${shell} .resize-n { top:0; } ${shell} .resize-s { bottom:0; }
+        ${shell} .resize-e { right:0; } ${shell} .resize-w { left:0; }
+        ${shell} :is(.resize-nw,.resize-ne,.resize-sw,.resize-se) { width:14px; height:14px; z-index:5; }
+        ${shell} .resize-nw { left:0; top:0; cursor:nwse-resize; }
+        ${shell} .resize-ne { right:0; top:0; cursor:nesw-resize; }
+        ${shell} .resize-sw { left:0; bottom:0; cursor:nesw-resize; }
+        ${shell} .resize-se { right:0; bottom:0; cursor:nwse-resize; }
+        ${shell} .resize-se::after { content:''; position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(135deg,transparent 0 3px,#9abeb3 3px 4px); clip-path:polygon(100% 15%,100% 100%,15% 100%); }
+        ${shell} .boss-auto-settings-collapse { flex-shrink:0; width:27px; height:27px; margin:0; padding:0; border:1px solid #deebe8; border-radius:7px; color:#6c8581; background:white; font:14px/25px sans-serif; cursor:pointer; }
+        ${shell} .boss-auto-intro small { margin-left:auto; margin-right:8px; }
+        ${shell} .boss-auto-panel-body.collapsed { padding:10px 5px; overflow:hidden; }
+        ${shell} .boss-auto-panel-body.collapsed > :not(.boss-auto-intro) { display:none; }
+        ${shell} .boss-auto-panel-body.collapsed .boss-auto-intro { flex-direction:column; gap:8px; font-size:11px; }
+        ${shell} .boss-auto-panel-body.collapsed .boss-auto-intro > span { writing-mode:vertical-rl; }
+        ${shell} .boss-auto-panel-body.collapsed small { display:none; }
         ${shell} :focus-visible { outline:2px solid #6a9cdd; outline-offset:-2px; }
         ${shell}.ai-collapsed { --left-pane:42px; }
         ${shell}.log-collapsed { --right-pane:42px; }
-        ${shell}:is(.ai-collapsed,.log-collapsed) { width:min(880px,calc(100vw - 32px)); grid-template-columns:var(--left-pane) 10px minmax(200px,var(--pane-1)) 10px var(--right-pane); }
+        ${shell}.settings-collapsed { --middle-pane:42px; }
+        ${shell}:is(.ai-collapsed,.log-collapsed,.settings-collapsed) { width:min(880px,calc(100vw - 32px)); grid-template-columns:var(--left-pane) 10px var(--middle-pane) 10px var(--right-pane); }
         ${shell}.ai-collapsed .divider-0, ${shell}.log-collapsed .divider-1 { visibility:hidden; }
+        ${shell}.settings-collapsed:is(.ai-collapsed,.log-collapsed) .boss-auto-divider { visibility:hidden; }
+        ${shell}.ai-collapsed.settings-collapsed.log-collapsed:not(.compact) { grid-template-columns:1fr 10px 1fr 10px 1fr; }
+        ${shell}.narrow-header .boss-auto-subtitle, ${shell}.narrow-header .boss-auto-layout-tools > span { display:none; }
+        ${shell}.tiny-header .boss-auto-layout-tools { display:none; }
         ${shell}.collapsed { display:block; width:190px !important; height:auto !important; min-width:190px; min-height:0; }
         ${shell}.collapsed > :not(.boss-auto-panel-header):not(.chat-panel-header), ${shell}.collapsed .boss-auto-layout-tools { display:none; }
         ${shell}.compact:not(.collapsed) { display:flex; flex-direction:column; min-width:280px; overflow:auto; }
@@ -326,6 +405,9 @@
         ${shell}.compact > :is(.boss-auto-panel-header,.chat-panel-header) { flex-shrink:0; }
         ${shell}.compact > #${AI_CHAT_PANEL_ID} { order:1; flex:0 0 330px; max-height:none; }
         ${shell}.compact > .boss-auto-panel-body { order:2; flex:0 0 auto; max-height:none; overflow:visible; }
+        ${shell}.compact > .boss-auto-panel-body.collapsed { flex:0 0 44px; padding:8px 14px; }
+        ${shell}.compact .boss-auto-panel-body.collapsed .boss-auto-intro { flex-direction:row; justify-content:space-between; }
+        ${shell}.compact .boss-auto-panel-body.collapsed .boss-auto-intro > span { writing-mode:horizontal-tb; }
         ${shell}.compact > #${LOG_PANEL_ID} { order:3; flex:0 0 270px; }
         ${shell}.compact > :is(#${AI_CHAT_PANEL_ID},#${LOG_PANEL_ID}).collapsed { width:100%; min-width:0; flex:0 0 44px; height:44px; }
         ${shell}.compact :is(#${AI_CHAT_PANEL_ID},#${LOG_PANEL_ID}).collapsed > :is(.boss-auto-ai-chat-header,.boss-auto-log-header) { height:44px; min-height:44px; flex-direction:row; padding:8px 14px; }
@@ -391,7 +473,13 @@
       installWorkspace(target);
       const updateLayout = () => {
         if (!target.isConnected) return;
-        target.classList.toggle('compact', target.getBoundingClientRect().width < 660);
+        const collapsedSides = Number(target.classList.contains('ai-collapsed')) + Number(target.classList.contains('log-collapsed')) + Number(target.classList.contains('settings-collapsed'));
+        if (!collapsedSides) target.classList.remove('side-fit');
+        const minimum = target.classList.contains('side-fit') ? 660 - collapsedSides * 158 : 660;
+        const width = target.getBoundingClientRect().width;
+        target.classList.toggle('compact', width < minimum);
+        target.classList.toggle('narrow-header', width < 720);
+        target.classList.toggle('tiny-header', width < 560);
         const rect = target.getBoundingClientRect();
         if (rect.right > window.innerWidth || rect.left < 0) {
           target.style.left = `${Math.max(0, Math.min(rect.left, window.innerWidth - rect.width - 8))}px`;

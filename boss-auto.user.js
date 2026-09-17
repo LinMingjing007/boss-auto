@@ -5,7 +5,7 @@
 // @source       https://atomgit.com/gcw_r7Og3ygT/boss-auto
 // @downloadURL  https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/boss-auto.user.js
 // @updateURL    https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/boss-auto.user.js
-// @version      0.15.16
+// @version      0.15.17
 // @description  Boss 直聘职位筛选、在线状态判断及多轮聊天辅助
 // @author       you
 // @match        https://www.zhipin.com/web/geek/jobs*
@@ -14,12 +14,12 @@
 // @run-at       document-idle
 // @grant        GM_addStyle
 // @noframes
-// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/constants.js?v=0.15.16
-// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/storage.js?v=0.15.16
-// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/settings.js?v=0.15.16
-// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/chat.js?v=0.15.16
-// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/jobs.js?v=0.15.16
-// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/log.js?v=0.15.16
-// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/ai-chat.js?v=0.15.16
-// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/main.js?v=0.15.16
+// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/constants.js?v=0.15.17
+// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/storage.js?v=0.15.17
+// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/settings.js?v=0.15.17
+// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/chat.js?v=0.15.17
+// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/jobs.js?v=0.15.17
+// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/log.js?v=0.15.17
+// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/ai-chat.js?v=0.15.17
+// @require      https://raw.githubusercontent.com/LinMingjing007/boss-auto/main/src/main.js?v=0.15.17
 // ==/UserScript==
