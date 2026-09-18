@@ -679,6 +679,10 @@
       panel.querySelector('.boss-auto-start').addEventListener('click', () => {
         const button = panel.querySelector('.boss-auto-start');
         const deliveryState = jobBridge.getState();
+        if (deliveryState.searchRunning) {
+          setStatus('岗位搜索正在进行中，请等待搜索结果刷新');
+          return;
+        }
         if (deliveryState.paginationRunning || deliveryState.deliveryRunning || deliveryState.deliveryPaused) {
           const paused = jobBridge.togglePause();
           button.textContent = paused ? '继续投递' : '暂停投递';

@@ -10,6 +10,7 @@
     let paginationRunning = false;
     let deliveryRunning = false;
     let deliveryPaused = false;
+    let searchRunning = false;
     const jobRecords = [];
     let deliveryIndex = 0;
     const scannedUrls = new Set();
@@ -24,6 +25,77 @@
         matched: jobRecords.length, failed,
         pending: jobRecords.length - clicked - failed - skipped,
       });
+    }
+
+    function resetJobQueue() {
+      jobRecords.length = 0;
+      deliveryIndex = 0;
+      scannedUrls.clear();
+      filteredUrls.clear();
+      publishStats();
+    }
+
+    function getJobListSignature() {
+      return [...document.querySelectorAll('.job-card-wrap .job-name')]
+        .slice(0, 5)
+        .map((link) => link.href || link.textContent.trim())
+        .join('|');
+    }
+
+    async function searchJobs(keyword) {
+      const query = String(keyword || '').trim();
+      if (!query) throw new Error('搜索岗位关键词不能为空');
+      if (!isJobsPage()) throw new Error('请先打开 Boss 职位列表页再搜索岗位');
+      if (searchRunning) throw new Error('岗位搜索正在进行中');
+      if (paginationRunning || deliveryRunning || deliveryPaused) {
+        throw new Error('自动投递运行或暂停中，不能切换搜索关键词');
+      }
+
+      const input = document.querySelector('.search-input-box input[placeholder="搜索职位、公司"]')
+        || document.querySelector('.search-input-box input');
+      const searchButton = document.querySelector('.search-input-box .search-btn');
+      if (!input || !searchButton) throw new Error('当前页面未找到岗位搜索框或搜索按钮');
+
+      searchRunning = true;
+      const deliveryButton = document.querySelector('.boss-auto-start');
+      const beforeSignature = getJobListSignature();
+      resetJobQueue();
+      if (deliveryButton) deliveryButton.textContent = '正在搜索岗位…';
+      setStatus(`正在搜索岗位：${query}`);
+
+      try {
+        input.focus();
+        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        if (valueSetter) valueSetter.call(input, query);
+        else input.value = query;
+        input.dispatchEvent(new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertText',
+          data: query,
+        }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        searchButton.click();
+
+        const startedAt = Date.now();
+        const timeout = 12000;
+        while (Date.now() - startedAt < timeout) {
+          const currentQuery = new URL(location.href).searchParams.get('query') || '';
+          const currentSignature = getJobListSignature();
+          const routeUpdated = currentQuery === query;
+          const resultsUpdated = currentSignature !== beforeSignature
+            || Date.now() - startedAt >= 2000;
+          if (routeUpdated && resultsUpdated) {
+            const resultCount = document.querySelectorAll('.job-card-wrap').length;
+            setStatus(`已搜索岗位“${query}”，当前加载 ${resultCount} 条`, 'success');
+            return { ok: true, keyword: query, resultCount, url: location.href };
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 200));
+        }
+        throw new Error('等待岗位搜索结果刷新超时');
+      } finally {
+        searchRunning = false;
+        if (deliveryButton) deliveryButton.textContent = '开始投递';
+      }
     }
 
     function collectJobRecords() {
@@ -95,7 +167,7 @@
   
     /** Boss 职位列表通过滚动触发下一页接口请求。 */
     async function autoPaginate() {
-      if (paginationRunning || !isJobsPage()) return;
+      if (searchRunning || paginationRunning || !isJobsPage()) return;
   
       paginationRunning = true;
       const button = document.querySelector('.boss-auto-start');
@@ -523,7 +595,7 @@
     }
   
     async function startDelivery() {
-      if (paginationRunning || deliveryRunning) return;
+      if (searchRunning || paginationRunning || deliveryRunning) return;
       deliveryPaused = false;
       const button = document.querySelector('.boss-auto-start');
       if (button) button.textContent = '暂停投递';
@@ -550,8 +622,16 @@
     /** 当前阶段只显示配置面板，不自动执行翻页；点击按钮后开始。 */
 
     return {
+      searchJobs,
       startDelivery,
-      getState: () => ({ paginationRunning, deliveryRunning, deliveryPaused }),
+      getState: () => ({
+        searchRunning,
+        paginationRunning,
+        deliveryRunning,
+        deliveryPaused,
+        deliveryIndex,
+        queueTotal: jobRecords.length,
+      }),
       togglePause() {
         deliveryPaused = !deliveryPaused;
         return deliveryPaused;

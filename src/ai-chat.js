@@ -5,6 +5,7 @@
     const {
       AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS, MAX_CHAT_MESSAGE_LENGTH,
       loadConfig, loadConfigStore, saveConfig, setStatus, escapeHtml,
+      jobBridge, isJobsPage,
     } = context;
     let panel = null;
     let targetId = null;
@@ -93,6 +94,78 @@
         },
       },
     };
+    const searchJobsTool = {
+      type: 'function',
+      function: {
+        name: 'search_jobs',
+        description: '在 Boss 职位列表页使用页面原生搜索框搜索指定关键词的岗位，并等待搜索结果刷新。搜索成功后可继续调用 start_deliver_jobs。',
+        strict: true,
+        parameters: {
+          type: 'object',
+          properties: {
+            keyword: { type: 'string', description: '要搜索的岗位关键词。' },
+          },
+          required: ['keyword'],
+          additionalProperties: false,
+        },
+      },
+    };
+    const startDeliverJobsTool = {
+      type: 'function',
+      function: {
+        name: 'start_deliver_jobs',
+        description: '在 Boss 职位列表页启动或继续自动浏览和投递岗位。复用页面上的“开始投递/继续投递”按钮，并与本地投递状态保持同步。',
+        strict: true,
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: [],
+          additionalProperties: false,
+        },
+      },
+    };
+
+    async function searchJobs(argumentsText) {
+      let request;
+      try {
+        request = JSON.parse(argumentsText || '{}');
+      } catch {
+        throw new Error('AI 搜索岗位工具参数不是有效 JSON');
+      }
+      const keyword = typeof request.keyword === 'string' ? request.keyword.trim() : '';
+      if (!keyword) throw new Error('搜索岗位关键词不能为空');
+      const result = await jobBridge?.searchJobs?.(keyword);
+      if (!result) throw new Error('岗位搜索模块不可用');
+      return JSON.stringify(result);
+    }
+
+    async function startDeliverJobs() {
+      if (!isJobsPage?.()) throw new Error('请先打开 Boss 职位列表页再启动投递');
+      const button = document.querySelector('.boss-auto-start');
+      if (!button) throw new Error('当前页面未找到“开始投递”按钮');
+      const before = jobBridge?.getState?.() || {};
+      if ((before.paginationRunning || before.deliveryRunning) && !before.deliveryPaused) {
+        return JSON.stringify({ ok: true, status: 'running', message: '自动投递已在运行' });
+      }
+      if (before.queueTotal > 0 && before.deliveryIndex >= before.queueTotal && !before.deliveryPaused) {
+        return JSON.stringify({ ok: true, status: 'completed', message: '岗位队列已经处理完毕' });
+      }
+
+      button.click();
+      // 已有岗位队列时，startDelivery 会先经过一次异步的暂停状态检查，
+      // 等待一个微任务后再读取共享状态，避免把成功启动误判为失败。
+      await Promise.resolve();
+      const after = jobBridge?.getState?.() || {};
+      const resumed = before.deliveryPaused && !after.deliveryPaused;
+      if (!resumed && !after.paginationRunning && !after.deliveryRunning && !after.deliveryPaused) {
+        throw new Error('点击“开始投递”后任务未进入运行状态');
+      }
+      return JSON.stringify({
+        ok: true,
+        status: resumed ? 'resumed' : 'started',
+        message: resumed ? '自动投递已继续' : '自动投递已启动',
+      });
+    }
 
     function normalizeMessageSequenceUpdate(sequence, currentSequence) {
       if (!Array.isArray(sequence)) throw new Error('消息序列必须是数组');
@@ -522,6 +595,7 @@
       const systemContext = [
         '你是求职助手，请用中文回答用户问题。',
         '需要了解当前配置时使用 read_user_config；当用户明确要求修改求职配置时使用 update_user_config；没有明确要求时不要修改配置。AI 接入配置（接口地址、模型和 API Key）不可读取、不可修改。',
+        '用户要求搜索特定关键词岗位时，且当前位于 Boss 职位列表页，使用 search_jobs。搜索成功后，只有用户明确要求开始或继续投递时才使用 start_deliver_jobs。',
         '工具执行失败时会返回包含 ok:false 和 error 的 JSON 工具结果。请根据错误自行决定修正参数后再次调用、询问用户补充信息，或停止尝试并说明原因。不要把失败说成成功，也不要重复执行已经成功且不需要再次执行的操作。',
         config.resumePrompt,
       ].filter(Boolean).join('\n\n');
@@ -546,7 +620,7 @@
                 temperature: 0.2,
                 max_tokens: 1024,
                 thinking: { type: 'disabled' },
-                tools: [readConfigTool, updateConfigTool, askUserTool],
+                tools: [readConfigTool, updateConfigTool, askUserTool, searchJobsTool, startDeliverJobsTool],
                 tool_choice: 'auto',
                 messages: conversation,
               }),
@@ -584,10 +658,22 @@
                 result = `当前配置：\n${readUserConfig()}`;
               } else if (toolName === 'ask_user') {
                 result = await requestUserAnswer(toolCall.function.arguments);
+              } else if (toolName === 'search_jobs') {
+                result = await searchJobs(toolCall.function.arguments);
+              } else if (toolName === 'start_deliver_jobs') {
+                result = await startDeliverJobs();
               } else {
                 throw new Error('AI 返回了不支持的工具');
               }
-              addLog(toolName === 'read_user_config' ? 'AI 读取了当前配置' : toolName === 'ask_user' ? 'AI 已收到用户选择' : result, 'success');
+              addLog(toolName === 'read_user_config'
+                ? 'AI 读取了当前配置'
+                : toolName === 'ask_user'
+                  ? 'AI 已收到用户选择'
+                  : toolName === 'search_jobs'
+                    ? 'AI 已通过页面原生搜索框完成岗位搜索'
+                  : toolName === 'start_deliver_jobs'
+                    ? 'AI 已同步启动本地投递任务'
+                    : result, 'success');
             } catch (error) {
               // User cancellation ends the turn; ordinary tool errors go back to the model.
               if (error?.code === 'USER_CANCELLED') throw error;

@@ -12,8 +12,16 @@
   let hasRunForUrl = false;
   const runtimeState = { chatMonitoring: false };
   const jobBridge = {
-    getState: () => ({ paginationRunning: false, deliveryRunning: false, deliveryPaused: false }),
+    getState: () => ({
+      searchRunning: false,
+      paginationRunning: false,
+      deliveryRunning: false,
+      deliveryPaused: false,
+      deliveryIndex: 0,
+      queueTotal: 0,
+    }),
     startDelivery: () => {},
+    searchJobs: async () => null,
     togglePause: () => false,
   };
 
@@ -61,7 +69,7 @@
     jobBridge,
     isConfigSwitchLocked: () => {
       const state = jobBridge.getState();
-      return Boolean(state.paginationRunning || state.deliveryRunning || state.deliveryPaused || runtimeState.chatMonitoring);
+      return Boolean(state.searchRunning || state.paginationRunning || state.deliveryRunning || state.deliveryPaused || runtimeState.chatMonitoring);
     },
   });
   const {
@@ -83,7 +91,13 @@
   });
   const { createChatPanel, stopChatMonitor } = chat;
   const aiChat = typeof window.BossAutoAiChat === 'function'
-    ? window.BossAutoAiChat({ AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS, MAX_CHAT_MESSAGE_LENGTH, loadConfig: window.BossAutoStorage.loadConfig, loadConfigStore: window.BossAutoStorage.loadConfigStore, saveConfig: window.BossAutoStorage.saveConfig, setStatus, escapeHtml })
+    ? window.BossAutoAiChat({
+      AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS, MAX_CHAT_MESSAGE_LENGTH,
+      loadConfig: window.BossAutoStorage.loadConfig,
+      loadConfigStore: window.BossAutoStorage.loadConfigStore,
+      saveConfig: window.BossAutoStorage.saveConfig,
+      setStatus, escapeHtml, jobBridge, isJobsPage,
+    })
     : { createAiChatPanel() {}, removeAiChatPanel() {} };
   const jobs = window.BossAutoJobs({
     setStatus, getConfig, loadConfig: window.BossAutoStorage.loadConfig,
