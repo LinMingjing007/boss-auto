@@ -92,6 +92,7 @@
         'keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt',
         'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'unknownOnlineStatusPolicy', 'selectedOnlineStatuses',
       ];
+      const changedFields = editableFields.filter((field) => changes[field] !== null && changes[field] !== undefined);
       editableFields.forEach((field) => {
         if (changes[field] !== null && changes[field] !== undefined) next[field] = changes[field];
       });
@@ -103,10 +104,18 @@
         && next.selectedOnlineStatuses.some((status) => !onlineStatusValues.includes(status))) {
         throw new Error('在线状态包含不支持的选项');
       }
-      saveConfig(next);
-      window.dispatchEvent(new Event('boss-auto-config-changed'));
-      const changedFields = editableFields.filter((field) => changes[field] !== null && changes[field] !== undefined);
       if (!changedFields.length) return '没有需要修改的配置';
+      saveConfig(next);
+      const saved = loadConfig();
+      const failedFields = changedFields.filter((field) => (
+        JSON.stringify(saved[field]) !== JSON.stringify(next[field])
+      ));
+      if (failedFields.length) {
+        throw new Error(`配置写入后校验失败：${failedFields.join('、')}`);
+      }
+      window.dispatchEvent(new CustomEvent('boss-auto-config-changed', {
+        detail: { source: 'ai-chat', changedFields },
+      }));
       return `配置已更新：${changedFields.join('、')}`;
     }
 

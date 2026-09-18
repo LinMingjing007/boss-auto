@@ -8,6 +8,7 @@
       jobBridge, loadConfigStore, saveConfigStore, setActiveVersion, isConfigSwitchLocked,
     } = context;
     let settingsViewDirty = false;
+    let settingsViewStale = false;
     let onlineStatusFieldAvailable = null;
 
     function getConfig() {
@@ -84,6 +85,28 @@
       if (!document.getElementById(SETTINGS_VIEW_ID)) createSettingsView();
       document.getElementById(SETTINGS_VIEW_ID).hidden = false;
     }
+
+    function handleExternalConfigChange(event) {
+      if (event.detail?.source !== 'ai-chat') return;
+      const view = document.getElementById(SETTINGS_VIEW_ID);
+      if (!view) return;
+      if (settingsViewDirty) {
+        settingsViewStale = true;
+        const note = view.querySelector('.boss-auto-save-note');
+        if (note) note.textContent = '配置已被 AI 更新，请关闭后重新打开';
+        setStatus('AI 已更新配置；当前设置页有未保存修改，已阻止旧表单覆盖', 'error');
+        return;
+      }
+
+      const wasVisible = !view.hidden;
+      view.remove();
+      document.getElementById(`${SETTINGS_VIEW_ID}-style`)?.remove();
+      createSettingsView();
+      const refreshedView = document.getElementById(SETTINGS_VIEW_ID);
+      if (refreshedView) refreshedView.hidden = !wasVisible;
+      if (wasVisible) setStatus('AI 已更新配置，设置页已同步', 'success');
+    }
+    window.addEventListener('boss-auto-config-changed', handleExternalConfigChange);
   
     function updateOnlineStatusCapability(available) {
       onlineStatusFieldAvailable = available;
@@ -100,6 +123,7 @@
   
     function createSettingsView() {
       if (document.getElementById(SETTINGS_VIEW_ID)) return;
+      settingsViewStale = false;
   
       const config = loadConfig();
       const store = loadConfigStore();
@@ -316,6 +340,7 @@
       nav.querySelector('button').click();
       const recreateVersionView = () => {
         settingsViewDirty = false;
+        settingsViewStale = false;
         view.remove();
         document.getElementById(`${SETTINGS_VIEW_ID}-style`)?.remove();
         createSettingsView();
@@ -481,6 +506,10 @@
       }));
       view.querySelectorAll('input[type="text"], input[type="password"], input[type="checkbox"], select:not(.boss-auto-version-select), textarea').forEach((input) => input.addEventListener('change', markSettingsDirty));
       view.querySelector('.boss-auto-save-settings').addEventListener('click', () => {
+        if (settingsViewStale) {
+          setStatus('配置已被 AI 更新，请关闭设置页后重新打开，避免覆盖新配置', 'error');
+          return;
+        }
         const unlimited = view.querySelector('[name="onlineStatusMode"]').checked;
         const selected = [...view.querySelectorAll('[name="selectedOnlineStatuses"]:checked')].map((item) => item.value);
         if (!unlimited && !selected.length) { setStatus('请至少选择一个在线状态，或选择“不限”', 'error'); return; }
