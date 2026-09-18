@@ -3,7 +3,7 @@
 
   window.BossAutoChat = function createChatModule(context) {
     const {
-      CHAT_PANEL_ID, MESSAGE_INTERVAL_MS,
+      CHAT_PANEL_ID, MESSAGE_INTERVAL_MS, MAX_CHAT_MESSAGE_LENGTH,
       loadConfig, getMessageRecordKey, hasMessageRecord, saveMessageRecord,
       setStatus, addSettingsButton, isChatPage, randomDelay,
       loadConfigStore, setActiveVersion, setMonitoringState,
@@ -17,6 +17,7 @@
     let chatMonitorRunId = 0;
     const chatCardSignatures = new Map();
     const chatProcessingKeys = new Set();
+    const WECHAT_EXCHANGE_REQUEST_TEXT = '我想要和您交换微信，您是否同意';
     const taskStats = { total: 0, success: 0, skipped: 0, failed: 0 };
     const publishStats = () => window.BossAutoLogInstance?.updateStats?.('chat', {
       ...taskStats, pending: taskStats.total - taskStats.success - taskStats.skipped - taskStats.failed,
@@ -241,6 +242,10 @@
         setStatus('请先填写消息模板', 'error');
         return false;
       }
+      if (text.length > MAX_CHAT_MESSAGE_LENGTH) {
+        setStatus(`消息超过 Boss 单条 ${MAX_CHAT_MESSAGE_LENGTH} 字限制`, 'error');
+        return false;
+      }
   
       const input = findChatInput();
       if (!input) {
@@ -380,11 +385,15 @@
           if (message.type === 'image') {
             await sendImageMessage(message);
           } else {
+            const text = message.content.trim();
+            if (text.length > MAX_CHAT_MESSAGE_LENGTH) {
+              throw new Error(`文字消息超过 Boss 单条 ${MAX_CHAT_MESSAGE_LENGTH} 字限制`);
+            }
             const input = await waitForChatInput();
             if (!input) throw new Error('聊天输入框不可用');
             const previousOwnCount = document.querySelectorAll('.chat-record .message-item.item-myself').length;
             const previousErrorCount = document.querySelectorAll('.message-status.status-error').length;
-            fillChatInput(input, message.content.trim());
+            fillChatInput(input, text);
             const sendButton = await waitForSendButton(input);
             if (!sendButton) throw new Error('发送按钮不可用或仍处于禁用状态');
             sendButton.click();
@@ -462,10 +471,58 @@
       }
       return undefined;
     }
+
+    function findPendingWechatAgreeButton() {
+      const messageItems = [...document.querySelectorAll('.chat-record .message-item')].reverse();
+      for (const item of messageItems) {
+        const text = item.textContent.replace(/\s+/g, ' ').trim();
+        if (!text.includes(WECHAT_EXCHANGE_REQUEST_TEXT)) continue;
+        const card = item.querySelector('.message-dialog-both') || item;
+        const button = [...card.querySelectorAll('button, a, [role="button"], .card-btn, .btn-v2')].find((element) => (
+          element.textContent.trim() === '同意'
+          && !element.disabled
+          && element.getAttribute('aria-disabled') !== 'true'
+          && !element.classList.contains('disabled')
+          && !element.closest('.disabled')
+          && getComputedStyle(element).display !== 'none'
+          && getComputedStyle(element).visibility !== 'hidden'
+        ));
+        if (button) return { button, messageId: item.dataset.mid || '' };
+      }
+      return null;
+    }
+
+    async function waitForWechatAgreeButton(timeout = 6000) {
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < timeout) {
+        const target = findPendingWechatAgreeButton();
+        if (target) return target;
+        await new Promise((resolve) => window.setTimeout(resolve, 200));
+      }
+      return null;
+    }
+
+    async function acceptWechatExchangeRequest(snapshot, runId) {
+      clickChatCard(snapshot.card);
+      const selected = await waitForSelectedChat(snapshot);
+      if (!selected) throw new Error('联系人会话切换未完成');
+      const target = await waitForWechatAgreeButton();
+      if (!target) throw new Error('检测到微信交换请求，但未找到可点击的“同意”按钮');
+      await randomDelay(200, 600);
+      if (runId !== chatMonitorRunId) return false;
+      target.button.click();
+      setStatus(`已自动点击微信交换请求的“同意”：${snapshot.id || snapshot.message}`, 'success');
+      console.info('[Boss Auto] wechat exchange agree button clicked:', {
+        key: snapshot.key,
+        messageId: target.messageId,
+      });
+      return true;
+    }
   
     async function processNewChat(snapshot, runId = chatMonitorRunId) {
       if (chatMonitorBusy) return;
       taskStats.total += 1;
+      const isWechatExchangeRequest = snapshot.message.includes(WECHAT_EXCHANGE_REQUEST_TEXT);
   
       const config = loadConfig();
       const sequence = config.messageSequence?.length
@@ -473,7 +530,7 @@
         : (config.messageTemplate.trim()
           ? [{ type: 'text', content: config.messageTemplate }]
           : []);
-      if (!sequence.length) {
+      if (!isWechatExchangeRequest && !sequence.length) {
         taskStats.skipped += 1;
         publishStats();
         console.info('[Boss Auto] chat event skipped: empty message sequence', { snapshot });
@@ -481,7 +538,7 @@
         return;
       }
       const recordKey = getMessageRecordKey(snapshot);
-      if (hasMessageRecord(snapshot) || chatProcessingKeys.has(recordKey)) {
+      if ((!isWechatExchangeRequest && hasMessageRecord(snapshot)) || chatProcessingKeys.has(recordKey)) {
         taskStats.skipped += 1;
         publishStats();
         console.info('[Boss Auto] chat event skipped: duplicate message record', { snapshot });
@@ -494,6 +551,12 @@
       try {
         await randomDelay(100, 400);
         if (runId !== chatMonitorRunId) { taskStats.skipped += 1; return; }
+        if (isWechatExchangeRequest) {
+          const accepted = await acceptWechatExchangeRequest(snapshot, runId);
+          if (!accepted) { taskStats.skipped += 1; return; }
+          taskStats.success += 1;
+          return;
+        }
         clickChatCard(snapshot.card);
         const selected = await waitForSelectedChat(snapshot);
         if (!selected) throw new Error('联系人会话切换未完成');

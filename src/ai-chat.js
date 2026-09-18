@@ -3,7 +3,7 @@
 
   window.BossAutoAiChat = function createAiChatModule(context) {
     const {
-      AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS,
+      AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS, MAX_CHAT_MESSAGE_LENGTH,
       loadConfig, loadConfigStore, saveConfig, setStatus, escapeHtml,
     } = context;
     let panel = null;
@@ -113,6 +113,9 @@
         if (message.type === 'text') {
           if (typeof message.content !== 'string' || !message.content.trim()) {
             throw new Error(`第 ${index + 1} 条文字消息内容不能为空`);
+          }
+          if (message.content.trim().length > MAX_CHAT_MESSAGE_LENGTH) {
+            throw new Error(`第 ${index + 1} 条文字消息超过 Boss 单条 ${MAX_CHAT_MESSAGE_LENGTH} 字限制`);
           }
           return { id, type: 'text', content: message.content };
         }

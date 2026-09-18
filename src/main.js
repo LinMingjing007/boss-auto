@@ -3,7 +3,7 @@
 
   const {
     TARGET_PATH, SCRIPT_VERSION, CHAT_PANEL_ID, AI_CHAT_PANEL_ID, PANEL_ID, STATUS_ID,
-    STYLE_ID, SETTINGS_VIEW_ID, MESSAGE_INTERVAL_MS, STATUS_OPTIONS, AI_MODEL_OPTIONS,
+    STYLE_ID, SETTINGS_VIEW_ID, MESSAGE_INTERVAL_MS, MAX_CHAT_MESSAGE_LENGTH, STATUS_OPTIONS, AI_MODEL_OPTIONS,
     LOG_PANEL_ID,
     AI_REQUEST_TIMEOUT_MS,
   } = window.BossAutoConstants;
@@ -49,7 +49,7 @@
 
 
   const settings = window.BossAutoSettings({
-    PANEL_ID, SETTINGS_VIEW_ID, STATUS_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS, AI_MODEL_OPTIONS,
+    PANEL_ID, SETTINGS_VIEW_ID, STATUS_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS, MAX_CHAT_MESSAGE_LENGTH, AI_MODEL_OPTIONS,
     loadConfig: window.BossAutoStorage.loadConfig,
     saveConfig: window.BossAutoStorage.saveConfig,
     loadConfigStore: window.BossAutoStorage.loadConfigStore,
@@ -69,7 +69,7 @@
     updateOnlineStatusCapability, createSettingsPanel,
   } = settings;
   const chat = window.BossAutoChat({
-    CHAT_PANEL_ID, MESSAGE_INTERVAL_MS,
+    CHAT_PANEL_ID, MESSAGE_INTERVAL_MS, MAX_CHAT_MESSAGE_LENGTH,
     loadConfig: window.BossAutoStorage.loadConfig,
     loadConfigStore: window.BossAutoStorage.loadConfigStore,
     setActiveVersion: window.BossAutoStorage.setActiveVersion,
@@ -83,7 +83,7 @@
   });
   const { createChatPanel, stopChatMonitor } = chat;
   const aiChat = typeof window.BossAutoAiChat === 'function'
-    ? window.BossAutoAiChat({ AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS, loadConfig: window.BossAutoStorage.loadConfig, loadConfigStore: window.BossAutoStorage.loadConfigStore, saveConfig: window.BossAutoStorage.saveConfig, setStatus, escapeHtml })
+    ? window.BossAutoAiChat({ AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS, MAX_CHAT_MESSAGE_LENGTH, loadConfig: window.BossAutoStorage.loadConfig, loadConfigStore: window.BossAutoStorage.loadConfigStore, saveConfig: window.BossAutoStorage.saveConfig, setStatus, escapeHtml })
     : { createAiChatPanel() {}, removeAiChatPanel() {} };
   const jobs = window.BossAutoJobs({
     setStatus, getConfig, loadConfig: window.BossAutoStorage.loadConfig,

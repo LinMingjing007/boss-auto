@@ -3,7 +3,7 @@
 
   window.BossAutoConstants = Object.freeze({
     TARGET_PATH: '/web/geek/jobs',
-    SCRIPT_VERSION: '0.15.20',
+    SCRIPT_VERSION: '0.15.22',
     CONFIG_KEY: 'boss-auto-config',
     MESSAGE_RECORDS_KEY: 'boss-auto-message-records',
     CHAT_PANEL_ID: 'boss-auto-chat-panel',
@@ -15,6 +15,7 @@
     SETTINGS_VIEW_ID: 'boss-auto-settings-view',
     MAX_IMAGE_SIZE_BYTES: 1024 * 1024,
     MESSAGE_INTERVAL_MS: 30,
+    MAX_CHAT_MESSAGE_LENGTH: 999,
     AI_REQUEST_TIMEOUT_MS: 20000,
     AI_MODEL_OPTIONS: [
       { value: 'deepseek-v4-flash', text: 'DeepSeek V4 Flash（兼容名称）' },

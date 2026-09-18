@@ -3,7 +3,7 @@
 
   window.BossAutoSettings = function createSettingsModule(context) {
     const {
-      PANEL_ID, SETTINGS_VIEW_ID, STATUS_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS, AI_MODEL_OPTIONS,
+      PANEL_ID, SETTINGS_VIEW_ID, STATUS_ID, STATUS_OPTIONS, MESSAGE_INTERVAL_MS, MAX_CHAT_MESSAGE_LENGTH, AI_MODEL_OPTIONS,
       loadConfig, saveConfig, handleImageFileSelection, setStatus, escapeHtml,
       jobBridge, loadConfigStore, saveConfigStore, setActiveVersion, isConfigSwitchLocked,
     } = context;
@@ -462,7 +462,7 @@
               handleImageFileSelection(file, message, renderMessages);
             });
           } else {
-            content.innerHTML = `<textarea class="message-text" placeholder="输入消息">${escapeHtml(message.content || '')}</textarea>`;
+            content.innerHTML = `<textarea class="message-text" maxlength="${MAX_CHAT_MESSAGE_LENGTH}" placeholder="输入消息（最多 ${MAX_CHAT_MESSAGE_LENGTH} 字）">${escapeHtml(message.content || '')}</textarea>`;
             content.querySelector('.message-text').addEventListener('input', (event) => { message.content = event.target.value; markSettingsDirty(); });
           }
           row.querySelector('.message-type').addEventListener('change', (event) => {
@@ -516,6 +516,13 @@
         if (!unlimited && onlineStatusFieldAvailable === false) { setStatus('当前页面没有在线状态字段，只能选择“不限”', 'error'); return; }
         const invalidMessage = messages.find((message) => !message.content || (message.type === 'text' && !message.content.trim()));
         if (invalidMessage) { setStatus('请补全所有文字消息或图片消息', 'error'); return; }
+        const oversizedMessageIndex = messages.findIndex((message) => (
+          message.type !== 'image' && message.content.trim().length > MAX_CHAT_MESSAGE_LENGTH
+        ));
+        if (oversizedMessageIndex >= 0) {
+          setStatus(`第 ${oversizedMessageIndex + 1} 条文字消息超过 ${MAX_CHAT_MESSAGE_LENGTH} 字限制`, 'error');
+          return;
+        }
         const selectedAiModel = view.querySelector('[name="aiModel"]').value;
         if (view.querySelector('[name="aiEnabled"]').checked) {
           const missingAiField = [
