@@ -1,34 +1,58 @@
 (function () {
   'use strict';
 
-  const { CONFIG_KEY, MESSAGE_RECORDS_KEY, MAX_IMAGE_SIZE_BYTES, MESSAGE_INTERVAL_MS } = window.BossAutoConstants;
+  const {
+    CONFIG_KEY, MESSAGE_RECORDS_KEY, MAX_IMAGE_SIZE_BYTES, MESSAGE_INTERVAL_MS, STATUS_OPTIONS,
+  } = window.BossAutoConstants;
   const imageSelectionTokens = new WeakMap();
+  const onlineStatusValues = STATUS_OPTIONS
+    .map((option) => option.value)
+    .filter((value) => value !== '不限');
+
+  function normalizeTermsValue(value) {
+    if (typeof value !== 'string') return '';
+    return value
+      .split(/[-,，、;；\r\n]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join('-');
+  }
 
   function createDefaultAiConnection(overrides = {}) {
-    const configuredModel = overrides.aiModel || '';
+    const configuredModel = typeof overrides.aiModel === 'string' ? overrides.aiModel : '';
     return {
-      aiEndpoint: overrides.aiEndpoint || 'https://api.deepseek.com/chat/completions',
+      aiEndpoint: typeof overrides.aiEndpoint === 'string' && overrides.aiEndpoint
+        ? overrides.aiEndpoint : 'https://api.deepseek.com/chat/completions',
       aiModel: /deepseek/i.test(configuredModel) ? configuredModel : 'deepseek-v4-flash',
-      aiApiKey: overrides.aiApiKey || '',
+      aiApiKey: typeof overrides.aiApiKey === 'string' ? overrides.aiApiKey : '',
     };
   }
 
   function createDefaultVersion(overrides = {}) {
+    const requestedOnlineStatusMode = ['不限', '状态筛选'].includes(overrides.onlineStatusMode)
+      ? overrides.onlineStatusMode : '不限';
+    const selectedOnlineStatuses = Array.isArray(overrides.selectedOnlineStatuses)
+      ? [...new Set(overrides.selectedOnlineStatuses.filter((status) => onlineStatusValues.includes(status)))]
+      : [];
+    const onlineStatusMode = requestedOnlineStatusMode === '状态筛选' && selectedOnlineStatuses.length
+      ? '状态筛选' : '不限';
     return {
       id: overrides.id || `version-${Date.now()}`,
       name: overrides.name || '默认配置',
       schemaVersion: 3,
-      keywords: overrides.keywords || '',
-      locations: overrides.locations || '',
-      blockedWords: overrides.blockedWords || '',
+      keywords: normalizeTermsValue(overrides.keywords),
+      locations: normalizeTermsValue(overrides.locations),
+      blockedWords: normalizeTermsValue(overrides.blockedWords),
       messageTemplate: overrides.messageTemplate || '',
-      onlineStatusMode: overrides.onlineStatusMode || '不限',
-      selectedOnlineStatuses: Array.isArray(overrides.selectedOnlineStatuses) ? overrides.selectedOnlineStatuses : [],
-      unknownOnlineStatusPolicy: overrides.unknownOnlineStatusPolicy || 'skip',
-      aiEnabled: Boolean(overrides.aiEnabled),
-      resumePrompt: overrides.resumePrompt || '',
-      aiPrompt: overrides.aiPrompt || '',
-      aiFailurePolicy: overrides.aiFailurePolicy || 'skip',
+      onlineStatusMode,
+      selectedOnlineStatuses: onlineStatusMode === '状态筛选' ? selectedOnlineStatuses : [],
+      unknownOnlineStatusPolicy: ['skip', 'keep'].includes(overrides.unknownOnlineStatusPolicy)
+        ? overrides.unknownOnlineStatusPolicy : 'skip',
+      aiEnabled: overrides.aiEnabled === true,
+      resumePrompt: typeof overrides.resumePrompt === 'string' ? overrides.resumePrompt : '',
+      aiPrompt: typeof overrides.aiPrompt === 'string' ? overrides.aiPrompt : '',
+      aiFailurePolicy: ['skip', 'keep'].includes(overrides.aiFailurePolicy)
+        ? overrides.aiFailurePolicy : 'skip',
       messageInterval: { min: MESSAGE_INTERVAL_MS, max: MESSAGE_INTERVAL_MS },
       messageSequence: Array.isArray(overrides.messageSequence)
         ? overrides.messageSequence
@@ -223,7 +247,8 @@
   }
 
   function splitTerms(value) {
-    return value.split('-').map((item) => item.trim()).filter(Boolean);
+    const normalized = normalizeTermsValue(value);
+    return normalized ? normalized.split('-') : [];
   }
 
   function randomDelay(min, max) {
@@ -241,6 +266,7 @@
     getMessageRecordKey,
     hasMessageRecord,
     saveMessageRecord,
+    normalizeTermsValue,
     splitTerms,
     randomDelay,
   });

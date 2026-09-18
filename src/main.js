@@ -7,7 +7,7 @@
     LOG_PANEL_ID,
     AI_REQUEST_TIMEOUT_MS,
   } = window.BossAutoConstants;
-  const { splitTerms } = window.BossAutoStorage;
+  const { normalizeTermsValue, splitTerms } = window.BossAutoStorage;
   let lastUrl = location.href;
   let hasRunForUrl = false;
   const runtimeState = { chatMonitoring: false };
@@ -96,6 +96,7 @@
       loadConfig: window.BossAutoStorage.loadConfig,
       loadConfigStore: window.BossAutoStorage.loadConfigStore,
       saveConfig: window.BossAutoStorage.saveConfig,
+      normalizeTermsValue,
       setStatus, escapeHtml, jobBridge, isJobsPage,
     })
     : { createAiChatPanel() {}, removeAiChatPanel() {} };

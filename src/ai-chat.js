@@ -4,7 +4,7 @@
   window.BossAutoAiChat = function createAiChatModule(context) {
     const {
       AI_CHAT_PANEL_ID, AI_REQUEST_TIMEOUT_MS, MAX_CHAT_MESSAGE_LENGTH,
-      loadConfig, loadConfigStore, saveConfig, setStatus, escapeHtml,
+      loadConfig, loadConfigStore, saveConfig, normalizeTermsValue, setStatus, escapeHtml,
       jobBridge, isJobsPage,
     } = context;
     let panel = null;
@@ -27,21 +27,22 @@
         parameters: {
           type: 'object',
           properties: {
-            keywords: { type: 'string' },
-            locations: { type: 'string' },
-            blockedWords: { type: 'string' },
-            resumePrompt: { type: 'string' },
-            aiPrompt: { type: 'string' },
-            aiEnabled: { type: 'boolean' },
-            aiFailurePolicy: { type: 'string', enum: ['skip', 'keep'] },
-            onlineStatusMode: { type: 'string', enum: ['不限', '状态筛选'] },
-            unknownOnlineStatusPolicy: { type: 'string', enum: ['skip', 'keep'] },
+            keywords: { type: 'string', description: '职位关键词。多个值必须使用半角连字符 - 分隔，例如：全栈开发-Go开发-Python开发。' },
+            locations: { type: 'string', description: '工作地点。多个值必须使用半角连字符 - 分隔，例如：深圳-广州。' },
+            blockedWords: { type: 'string', description: '岗位屏蔽词。多个值必须使用半角连字符 - 分隔；空字符串表示清空。' },
+            resumePrompt: { type: 'string', description: '求职者经历、技能和期望等简历背景。' },
+            aiPrompt: { type: 'string', description: 'AI 判断岗位是否适合的规则；启用 AI 判别时不能为空。' },
+            aiEnabled: { type: 'boolean', description: '是否启用 AI 岗位判别；启用前必须已有完整 AI 接入配置和非空判断提示词。' },
+            aiFailurePolicy: { type: 'string', enum: ['skip', 'keep'], description: 'AI 判断失败时，skip 表示跳过岗位，keep 表示允许继续。' },
+            onlineStatusMode: { type: 'string', enum: ['不限', '状态筛选'], description: '选择状态筛选时，selectedOnlineStatuses 至少需要一项。' },
+            unknownOnlineStatusPolicy: { type: 'string', enum: ['skip', 'keep'], description: '无法识别招聘者在线状态时，skip 表示跳过，keep 表示保留。' },
             selectedOnlineStatuses: {
-              type: 'array', items: { type: 'string', enum: onlineStatusValues },
+              type: 'array', description: '要保留的招聘者活跃状态；传入非空数组会自动启用状态筛选。',
+              items: { type: 'string', enum: onlineStatusValues },
             },
             messageSequence: {
               type: 'array',
-              description: '完整的聊天消息序列；空数组表示清空。文字消息可省略 id 和 name；图片消息必须使用 read_user_config 返回的原 id，且可省略 content。',
+              description: '完整的聊天消息序列；空数组表示清空。文字消息可省略 id 和 name；图片消息必须使用 read_user_config 返回的原 id，且可省略 content。默认四段式示例：第一条介绍姓名和大学，第二条简述做过的项目，第三条介绍荣誉或奖项，第四条说明与岗位匹配并表达沟通意愿。只能使用用户提供的真实信息，缺失的部分应省略，不能编造。',
               items: {
                 type: 'object',
                 properties: {
@@ -227,7 +228,6 @@
     function updateUserConfig(argumentsText) {
       const changes = parseToolArguments(argumentsText, '配置');
       const current = loadConfig();
-      const next = { ...current };
       const editableFields = [
         'keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt',
         'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'unknownOnlineStatusPolicy', 'selectedOnlineStatuses',
@@ -238,34 +238,97 @@
       if (unknownFields.length) throw new Error(`配置包含不支持的字段：${unknownFields.join('、')}`);
       const nullFields = providedFields.filter((field) => changes[field] === null);
       if (nullFields.length) throw new Error(`配置字段不能为 null，请省略未修改字段：${nullFields.join('、')}`);
-      const changedFields = providedFields.filter((field) => changes[field] !== undefined);
-      editableFields.forEach((field) => {
-        if (changes[field] !== null && changes[field] !== undefined) next[field] = changes[field];
+
+      const normalizedChanges = { ...changes };
+      const stringFields = ['keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt'];
+      stringFields.forEach((field) => {
+        if (normalizedChanges[field] !== undefined && typeof normalizedChanges[field] !== 'string') {
+          throw new Error(`${field} 必须是字符串`);
+        }
       });
-      if (changes.messageSequence !== null && changes.messageSequence !== undefined) {
-        next.messageSequence = normalizeMessageSequenceUpdate(changes.messageSequence, current.messageSequence);
+      if (normalizedChanges.aiEnabled !== undefined && typeof normalizedChanges.aiEnabled !== 'boolean') {
+        throw new Error('aiEnabled 必须是布尔值');
       }
-      if (next.onlineStatusMode === '不限') next.selectedOnlineStatuses = [];
-      if (next.onlineStatusMode === '状态筛选' && !Array.isArray(next.selectedOnlineStatuses)) {
+      const enumFields = {
+        aiFailurePolicy: ['skip', 'keep'],
+        onlineStatusMode: ['不限', '状态筛选'],
+        unknownOnlineStatusPolicy: ['skip', 'keep'],
+      };
+      Object.entries(enumFields).forEach(([field, values]) => {
+        if (normalizedChanges[field] !== undefined && !values.includes(normalizedChanges[field])) {
+          throw new Error(`${field} 只能是：${values.join('、')}`);
+        }
+      });
+      if (normalizedChanges.selectedOnlineStatuses !== undefined) {
+        if (!Array.isArray(normalizedChanges.selectedOnlineStatuses)) {
+          throw new Error('selectedOnlineStatuses 必须是数组');
+        }
+        if (normalizedChanges.selectedOnlineStatuses.some((status) => !onlineStatusValues.includes(status))) {
+          throw new Error('在线状态包含不支持的选项');
+        }
+        normalizedChanges.selectedOnlineStatuses = [...new Set(normalizedChanges.selectedOnlineStatuses)];
+      }
+
+      const termFields = ['keywords', 'locations', 'blockedWords'];
+      termFields.forEach((field) => {
+        if (normalizedChanges[field] === undefined) return;
+        normalizedChanges[field] = normalizeTermsValue(normalizedChanges[field]);
+      });
+      const changedFields = new Set(providedFields.filter((field) => normalizedChanges[field] !== undefined));
+      const next = { ...current };
+      editableFields.forEach((field) => {
+        if (normalizedChanges[field] !== undefined) next[field] = normalizedChanges[field];
+      });
+      if (normalizedChanges.messageSequence !== undefined) {
+        next.messageSequence = normalizeMessageSequenceUpdate(normalizedChanges.messageSequence, current.messageSequence);
+      }
+
+      const providedStatuses = normalizedChanges.selectedOnlineStatuses;
+      if (normalizedChanges.onlineStatusMode === '不限' && providedStatuses?.length) {
+        throw new Error('在线状态模式为“不限”时不能同时选择在线状态');
+      }
+      if (normalizedChanges.onlineStatusMode === undefined && providedStatuses?.length
+        && current.onlineStatusMode === '不限') {
+        next.onlineStatusMode = '状态筛选';
+        changedFields.add('onlineStatusMode');
+      }
+      if (next.onlineStatusMode === '不限') {
+        if (next.selectedOnlineStatuses?.length) changedFields.add('selectedOnlineStatuses');
         next.selectedOnlineStatuses = [];
       }
-      if (Array.isArray(next.selectedOnlineStatuses)
-        && next.selectedOnlineStatuses.some((status) => !onlineStatusValues.includes(status))) {
-        throw new Error('在线状态包含不支持的选项');
+      if (next.onlineStatusMode === '状态筛选'
+        && (!Array.isArray(next.selectedOnlineStatuses) || !next.selectedOnlineStatuses.length)) {
+        throw new Error('使用“状态筛选”时请至少选择一个在线状态');
       }
-      if (!changedFields.length) return '没有需要修改的配置';
+
+      if (next.aiEnabled) {
+        if (typeof next.aiPrompt !== 'string' || !next.aiPrompt.trim()) {
+          throw new Error('启用 AI 判别时判断提示词不能为空');
+        }
+        if (!next.aiEndpoint || !next.aiModel || !next.aiApiKey) {
+          throw new Error('启用 AI 判别前请先在设置页完善 AI 接口、模型和 API Key');
+        }
+        if (!/deepseek/i.test(next.aiModel)) throw new Error('当前仅支持 DeepSeek 模型');
+      }
+
+      if (!changedFields.size) return '没有需要修改的配置';
       saveConfig(next);
       const saved = loadConfig();
-      const failedFields = changedFields.filter((field) => (
+      const failedFields = [...changedFields].filter((field) => (
         JSON.stringify(saved[field]) !== JSON.stringify(next[field])
       ));
       if (failedFields.length) {
+        try {
+          saveConfig(current);
+        } catch (rollbackError) {
+          throw new Error(`配置写入后校验失败且回滚失败：${rollbackError.message}`);
+        }
         throw new Error(`配置写入后校验失败：${failedFields.join('、')}`);
       }
       window.dispatchEvent(new CustomEvent('boss-auto-config-changed', {
-        detail: { source: 'ai-chat', changedFields },
+        detail: { source: 'ai-chat', changedFields: [...changedFields] },
       }));
-      return `配置已更新：${changedFields.join('、')}`;
+      return `配置已更新：${[...changedFields].join('、')}`;
     }
 
     function readUserConfig() {
@@ -612,6 +675,8 @@
       const systemContext = [
         '你是求职助手，请用中文回答用户问题。',
         '生成或修改打招呼话术时，应自然、简洁并突出与目标岗位的匹配点，避免长篇自我介绍；每条话术默认控制在 80 个字以内，除非用户明确要求更长。',
+        '用户要求生成完整消息模板且未指定结构时，优先生成四条文字消息：第一条介绍姓名和大学；第二条简要介绍做过的项目及核心工作；第三条介绍荣誉或奖项；第四条说明自身经历与岗位匹配并表达进一步沟通意愿。示例：①“您好，我是{姓名}，毕业于{大学}{专业}。”②“我参与过{项目}，主要负责{核心工作}。”③“曾获{荣誉或奖项}。”④“我的经历与该岗位较匹配，期待与您进一步沟通。”占位内容必须替换为用户已提供的真实信息；信息缺失时省略对应内容，禁止编造。',
+        '修改职位关键词、工作地点或屏蔽词时，多个值必须使用半角连字符“-”分隔，不能使用逗号、顿号、分号或换行。',
         '需要了解当前配置时使用 read_user_config；当用户明确要求修改求职配置时使用 update_user_config；没有明确要求时不要修改配置。AI 接入配置（接口地址、模型和 API Key）不可读取、不可修改。',
         '用户要求搜索特定关键词岗位时，且当前位于 Boss 职位列表页，使用 search_jobs。搜索成功后，只有用户明确要求开始或继续投递时才使用 start_deliver_jobs。',
         '调用 update_user_config 时只传实际修改的字段，不要传未修改字段或 null。工具执行失败时会返回包含 ok:false 和 error 的 JSON 工具结果。请根据错误修正一次，仍无法解决时停止并说明原因；不要把失败说成成功，也不要重复执行已经成功且不需要再次执行的操作。本轮工具累计失败 5 次时会被强制终止。',
