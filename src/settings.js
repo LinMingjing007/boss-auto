@@ -83,7 +83,9 @@
         document.getElementById(`${SETTINGS_VIEW_ID}-style`)?.remove();
       }
       if (!document.getElementById(SETTINGS_VIEW_ID)) createSettingsView();
-      document.getElementById(SETTINGS_VIEW_ID).hidden = false;
+      const view = document.getElementById(SETTINGS_VIEW_ID);
+      view.hidden = false;
+      view.focus({ preventScroll: true });
     }
 
     function handleExternalConfigChange(event) {
@@ -233,10 +235,11 @@
       const view = document.createElement('section');
       view.id = SETTINGS_VIEW_ID;
       view.hidden = true;
+      view.tabIndex = -1;
       view.setAttribute('aria-label', 'Boss Auto 设置');
       view.innerHTML = `
         <div class="boss-auto-settings-card">
-          <div class="boss-auto-settings-head"><div><h2>偏好设置</h2><p>Boss Auto · 为你的下一份工作，做好准备</p></div><button type="button" class="boss-auto-close-settings">返回工作台</button></div>
+          <div class="boss-auto-settings-head"><div><h2>偏好设置</h2><p>Boss Auto · 为你的下一份工作，做好准备</p></div><button type="button" class="boss-auto-close-settings" data-confirm-discard="true">返回工作台</button></div>
           <div class="boss-auto-version-toolbar">
             <label><span>当前配置版本</span><select class="boss-auto-version-select">${versionOptions(store)}</select></label>
             <button type="button" class="boss-auto-new-version">新建版本</button>
@@ -491,11 +494,19 @@
       renderMessages();
       view.querySelector('.boss-auto-add-text').addEventListener('click', () => { markSettingsDirty(); messages.push({ id: `msg-${Date.now()}`, type: 'text', content: '' }); renderMessages(); });
       view.querySelector('.boss-auto-add-image').addEventListener('click', () => { markSettingsDirty(); messages.push({ id: `msg-${Date.now()}`, type: 'image', content: '', name: '' }); renderMessages(); });
-      view.querySelectorAll('.boss-auto-close-settings').forEach((button) => button.addEventListener('click', () => {
-        if (settingsViewDirty && !window.confirm('设置尚未保存，确定放弃修改吗？')) return;
+      const closeSettingsView = (confirmDiscard = false) => {
+        if (confirmDiscard && settingsViewDirty && !window.confirm('设置尚未保存，确定放弃修改吗？')) return;
         settingsViewDirty = false;
         view.hidden = true;
+      };
+      view.querySelectorAll('.boss-auto-close-settings').forEach((button) => button.addEventListener('click', () => {
+        closeSettingsView(button.dataset.confirmDiscard === 'true');
       }));
+      view.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        closeSettingsView(false);
+      });
       view.querySelector('[name="onlineStatusMode"]').addEventListener('change', (event) => {
         if (event.target.checked) view.querySelectorAll('[name="selectedOnlineStatuses"]').forEach((item) => { item.checked = false; });
         markSettingsDirty();

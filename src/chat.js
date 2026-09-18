@@ -17,7 +17,8 @@
     let chatMonitorRunId = 0;
     const chatCardSignatures = new Map();
     const chatProcessingKeys = new Set();
-    const WECHAT_EXCHANGE_REQUEST_TEXT = '我想要和您交换微信，您是否同意';
+    const handledConsentSignatures = new Set();
+    const CONSENT_REQUEST_MARKER = '您是否同意';
     const taskStats = { total: 0, success: 0, skipped: 0, failed: 0 };
     const publishStats = () => window.BossAutoLogInstance?.updateStats?.('chat', {
       ...taskStats, pending: taskStats.total - taskStats.success - taskStats.skipped - taskStats.failed,
@@ -472,13 +473,15 @@
       return undefined;
     }
 
-    function findPendingWechatAgreeButton() {
+    function findPendingConsentAgreeButton() {
       const messageItems = [...document.querySelectorAll('.chat-record .message-item')].reverse();
       for (const item of messageItems) {
         const text = item.textContent.replace(/\s+/g, ' ').trim();
-        if (!text.includes(WECHAT_EXCHANGE_REQUEST_TEXT)) continue;
+        if (!text.includes(CONSENT_REQUEST_MARKER)) continue;
         const card = item.querySelector('.message-dialog-both') || item;
-        const button = [...card.querySelectorAll('button, a, [role="button"], .card-btn, .btn-v2')].find((element) => (
+        const buttons = [...card.querySelectorAll('button, a, [role="button"], .card-btn, .btn-v2')];
+        const rejectButton = buttons.find((element) => element.textContent.trim() === '拒绝');
+        const agreeButton = buttons.find((element) => (
           element.textContent.trim() === '同意'
           && !element.disabled
           && element.getAttribute('aria-disabled') !== 'true'
@@ -487,34 +490,37 @@
           && getComputedStyle(element).display !== 'none'
           && getComputedStyle(element).visibility !== 'hidden'
         ));
-        if (button) return { button, messageId: item.dataset.mid || '' };
+        if (agreeButton && rejectButton) {
+          return { button: agreeButton, messageId: item.dataset.mid || '', requestText: text };
+        }
       }
       return null;
     }
 
-    async function waitForWechatAgreeButton(timeout = 6000) {
+    async function waitForConsentAgreeButton(timeout = 6000) {
       const startedAt = Date.now();
       while (Date.now() - startedAt < timeout) {
-        const target = findPendingWechatAgreeButton();
+        const target = findPendingConsentAgreeButton();
         if (target) return target;
         await new Promise((resolve) => window.setTimeout(resolve, 200));
       }
       return null;
     }
 
-    async function acceptWechatExchangeRequest(snapshot, runId) {
+    async function acceptConsentRequest(snapshot, runId) {
       clickChatCard(snapshot.card);
       const selected = await waitForSelectedChat(snapshot);
       if (!selected) throw new Error('联系人会话切换未完成');
-      const target = await waitForWechatAgreeButton();
-      if (!target) throw new Error('检测到微信交换请求，但未找到可点击的“同意”按钮');
+      const target = await waitForConsentAgreeButton();
+      if (!target) throw new Error('检测到同意请求，但未找到可点击的“同意/拒绝”卡片');
       await randomDelay(200, 600);
       if (runId !== chatMonitorRunId) return false;
       target.button.click();
-      setStatus(`已自动点击微信交换请求的“同意”：${snapshot.id || snapshot.message}`, 'success');
-      console.info('[Boss Auto] wechat exchange agree button clicked:', {
+      setStatus(`已自动点击请求卡片的“同意”：${snapshot.id || snapshot.message}`, 'success');
+      console.info('[Boss Auto] consent request agree button clicked:', {
         key: snapshot.key,
         messageId: target.messageId,
+        requestText: target.requestText,
       });
       return true;
     }
@@ -522,7 +528,7 @@
     async function processNewChat(snapshot, runId = chatMonitorRunId) {
       if (chatMonitorBusy) return;
       taskStats.total += 1;
-      const isWechatExchangeRequest = snapshot.message.includes(WECHAT_EXCHANGE_REQUEST_TEXT);
+      const isConsentRequest = snapshot.message.includes(CONSENT_REQUEST_MARKER);
   
       const config = loadConfig();
       const sequence = config.messageSequence?.length
@@ -530,7 +536,7 @@
         : (config.messageTemplate.trim()
           ? [{ type: 'text', content: config.messageTemplate }]
           : []);
-      if (!isWechatExchangeRequest && !sequence.length) {
+      if (!isConsentRequest && !sequence.length) {
         taskStats.skipped += 1;
         publishStats();
         console.info('[Boss Auto] chat event skipped: empty message sequence', { snapshot });
@@ -538,7 +544,7 @@
         return;
       }
       const recordKey = getMessageRecordKey(snapshot);
-      if ((!isWechatExchangeRequest && hasMessageRecord(snapshot)) || chatProcessingKeys.has(recordKey)) {
+      if ((!isConsentRequest && hasMessageRecord(snapshot)) || chatProcessingKeys.has(recordKey)) {
         taskStats.skipped += 1;
         publishStats();
         console.info('[Boss Auto] chat event skipped: duplicate message record', { snapshot });
@@ -551,9 +557,10 @@
       try {
         await randomDelay(100, 400);
         if (runId !== chatMonitorRunId) { taskStats.skipped += 1; return; }
-        if (isWechatExchangeRequest) {
-          const accepted = await acceptWechatExchangeRequest(snapshot, runId);
+        if (isConsentRequest) {
+          const accepted = await acceptConsentRequest(snapshot, runId);
           if (!accepted) { taskStats.skipped += 1; return; }
+          handledConsentSignatures.add(snapshot.signature);
           taskStats.success += 1;
           return;
         }
@@ -612,6 +619,22 @@
         monitorChatList();
       }, 80);
     }
+
+    async function processExistingConsentRequests(runId) {
+      const pendingRequests = getChatSnapshots().filter((snapshot) => (
+        !snapshot.isDraft
+        && snapshot.message.includes(CONSENT_REQUEST_MARKER)
+        && !handledConsentSignatures.has(snapshot.signature)
+      ));
+      if (!pendingRequests.length) return;
+      console.info('[Boss Auto] existing consent requests detected after monitor start:', {
+        count: pendingRequests.length,
+      });
+      for (const snapshot of pendingRequests) {
+        if (runId !== chatMonitorRunId) return;
+        await processNewChat(snapshot, runId);
+      }
+    }
   
     function observeChatList() {
       const list = document.querySelector('.user-list');
@@ -662,6 +685,7 @@
       setMonitoringState(true);
       setStatus('已开始监听聊天列表全部会话');
       console.info('[Boss Auto] chat monitor started for all conversations (MutationObserver + fallback)');
+      processExistingConsentRequests(chatMonitorRunId);
     }
   
     function stopChatMonitor() {
