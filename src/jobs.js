@@ -42,6 +42,37 @@
         .join('|');
     }
 
+    function isVisibleElement(element) {
+      if (!element || element.hidden || element.getAttribute('aria-hidden') === 'true') return false;
+      const style = window.getComputedStyle?.(element);
+      return !style || (style.display !== 'none' && style.visibility !== 'hidden');
+    }
+
+    function isJobSearchLoading() {
+      return [...document.querySelectorAll([
+        '.job-list-box [class*="loading"]',
+        '.job-list-container [class*="loading"]',
+      ].join(','))].some(isVisibleElement);
+    }
+
+    function getExplicitEmptySearchMessage() {
+      const emptyPattern = /暂无.*(?:职位|岗位|数据)|未找到.*(?:职位|岗位)|没有.*(?:职位|岗位)|无匹配.*(?:职位|岗位)/;
+      const candidates = document.querySelectorAll([
+        '.job-list-box .empty-tip',
+        '.job-list-box .empty-page',
+        '.job-list-box .job-list-empty',
+        '.job-list-box .no-data',
+        '.job-list-box [class*="empty"]',
+        '.job-list-box [class*="no-data"]',
+        '.job-list-container [class*="empty"]',
+        '.job-list-container [class*="no-data"]',
+      ].join(','));
+      const emptyElement = [...candidates].find((element) => (
+        isVisibleElement(element) && emptyPattern.test((element.textContent || '').replace(/\s+/g, ' ').trim())
+      ));
+      return emptyElement ? (emptyElement.textContent || '').replace(/\s+/g, ' ').trim() : '';
+    }
+
     async function searchJobs(keyword) {
       const query = String(keyword || '').trim();
       if (!query) throw new Error('搜索岗位关键词不能为空');
@@ -59,6 +90,7 @@
       searchRunning = true;
       const deliveryButton = document.querySelector('.boss-auto-start');
       const beforeSignature = getJobListSignature();
+      const beforeQuery = new URL(location.href).searchParams.get('query') || '';
       resetJobQueue();
       if (deliveryButton) deliveryButton.textContent = '正在搜索岗位…';
       setStatus(`正在搜索岗位：${query}`);
@@ -78,16 +110,41 @@
 
         const startedAt = Date.now();
         const timeout = 12000;
+        let sawResultsRefresh = beforeQuery === query;
+        let stableFingerprint = '';
+        let stableSince = 0;
         while (Date.now() - startedAt < timeout) {
+          const now = Date.now();
           const currentQuery = new URL(location.href).searchParams.get('query') || '';
           const currentSignature = getJobListSignature();
+          const resultCount = document.querySelectorAll('.job-card-wrap').length;
+          const loading = isJobSearchLoading();
           const routeUpdated = currentQuery === query;
-          const resultsUpdated = currentSignature !== beforeSignature
-            || Date.now() - startedAt >= 2000;
-          if (routeUpdated && resultsUpdated) {
-            const resultCount = document.querySelectorAll('.job-card-wrap').length;
+          if (loading || resultCount === 0 || currentSignature !== beforeSignature) {
+            sawResultsRefresh = true;
+          }
+
+          if (routeUpdated && sawResultsRefresh && !loading && resultCount > 0) {
+            const fingerprint = `${resultCount}:${currentSignature}`;
+            if (fingerprint !== stableFingerprint) {
+              stableFingerprint = fingerprint;
+              stableSince = now;
+            } else if (now - stableSince >= 200) {
+              setStatus(`已搜索岗位“${query}”，当前加载 ${resultCount} 条`, 'success');
+              return { ok: true, keyword: query, resultCount, url: location.href };
+            }
+          } else {
+            stableFingerprint = '';
+            stableSince = 0;
+          }
+
+          const emptyMessage = routeUpdated && sawResultsRefresh && !loading && resultCount === 0
+            && now - startedAt >= 1000 ? getExplicitEmptySearchMessage() : '';
+          if (emptyMessage) {
             setStatus(`已搜索岗位“${query}”，当前加载 ${resultCount} 条`, 'success');
-            return { ok: true, keyword: query, resultCount, url: location.href };
+            return {
+              ok: true, keyword: query, resultCount, empty: true, emptyMessage, url: location.href,
+            };
           }
           await new Promise((resolve) => window.setTimeout(resolve, 200));
         }

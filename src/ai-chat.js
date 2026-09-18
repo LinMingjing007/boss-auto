@@ -150,7 +150,15 @@
       if (!keyword) throw new Error('搜索岗位关键词不能为空');
       const result = await jobBridge?.searchJobs?.(keyword);
       if (!result) throw new Error('岗位搜索模块不可用');
-      return JSON.stringify(result);
+      if (result.ok !== true) throw new Error(result.error || '岗位搜索未成功完成');
+      const currentKeyword = typeof result.keyword === 'string' && result.keyword.trim()
+        ? result.keyword.trim()
+        : keyword;
+      return JSON.stringify({
+        ...result,
+        message: `请求成功，当前页面是“${currentKeyword}”的岗位搜索结果，可以调用 start_deliver_jobs 进行投递。`,
+        nextTool: 'start_deliver_jobs',
+      });
     }
 
     async function startDeliverJobs() {
@@ -603,6 +611,7 @@
 
       const systemContext = [
         '你是求职助手，请用中文回答用户问题。',
+        '生成或修改打招呼话术时，应自然、简洁并突出与目标岗位的匹配点，避免长篇自我介绍；每条话术默认控制在 80 个字以内，除非用户明确要求更长。',
         '需要了解当前配置时使用 read_user_config；当用户明确要求修改求职配置时使用 update_user_config；没有明确要求时不要修改配置。AI 接入配置（接口地址、模型和 API Key）不可读取、不可修改。',
         '用户要求搜索特定关键词岗位时，且当前位于 Boss 职位列表页，使用 search_jobs。搜索成功后，只有用户明确要求开始或继续投递时才使用 start_deliver_jobs。',
         '调用 update_user_config 时只传实际修改的字段，不要传未修改字段或 null。工具执行失败时会返回包含 ok:false 和 error 的 JSON 工具结果。请根据错误修正一次，仍无法解决时停止并说明原因；不要把失败说成成功，也不要重复执行已经成功且不需要再次执行的操作。本轮工具累计失败 5 次时会被强制终止。',
