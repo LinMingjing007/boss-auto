@@ -18,7 +18,7 @@
     }
 
     const onlineStatusValues = ['在线', '刚刚活跃', '今日活跃', '3日内活跃', '本周活跃', '本月活跃', '半年前活跃'];
-    const MAX_CONSECUTIVE_TOOL_FAILURES = 5;
+    const MAX_TOOL_FAILURES_PER_TURN = 5;
     const updateConfigTool = {
       type: 'function',
       function: {
@@ -119,13 +119,33 @@
       },
     };
 
-    async function searchJobs(argumentsText) {
-      let request;
-      try {
-        request = JSON.parse(argumentsText || '{}');
-      } catch {
-        throw new Error('AI 搜索岗位工具参数不是有效 JSON');
+    function parseToolArguments(argumentsValue, toolLabel) {
+      if (argumentsValue && typeof argumentsValue === 'object' && !Array.isArray(argumentsValue)) {
+        return argumentsValue;
       }
+      if (argumentsValue === undefined || argumentsValue === null || argumentsValue === '') return {};
+      if (typeof argumentsValue !== 'string') {
+        throw new Error(`AI ${toolLabel}工具参数必须是 JSON 对象`);
+      }
+
+      let text = argumentsValue.trim();
+      const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+      if (fenced) text = fenced[1].trim();
+      let parsed;
+      try {
+        parsed = JSON.parse(text || '{}');
+        if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+      } catch {
+        throw new Error(`AI ${toolLabel}工具参数不是有效 JSON`);
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error(`AI ${toolLabel}工具参数必须是 JSON 对象`);
+      }
+      return parsed;
+    }
+
+    async function searchJobs(argumentsText) {
+      const request = parseToolArguments(argumentsText, '搜索岗位');
       const keyword = typeof request.keyword === 'string' ? request.keyword.trim() : '';
       if (!keyword) throw new Error('搜索岗位关键词不能为空');
       const result = await jobBridge?.searchJobs?.(keyword);
@@ -197,15 +217,7 @@
     }
 
     function updateUserConfig(argumentsText) {
-      let changes;
-      try {
-        changes = JSON.parse(argumentsText || '{}');
-      } catch {
-        throw new Error('AI 配置工具参数不是有效 JSON');
-      }
-      if (!changes || typeof changes !== 'object' || Array.isArray(changes)) {
-        throw new Error('AI 配置工具参数必须是 JSON 对象');
-      }
+      const changes = parseToolArguments(argumentsText, '配置');
       const current = loadConfig();
       const next = { ...current };
       const editableFields = [
@@ -382,12 +394,7 @@
     }
 
     function parseAskUser(argumentsText) {
-      let request;
-      try {
-        request = JSON.parse(argumentsText || '{}');
-      } catch {
-        throw new Error('AI ask_user 参数不是有效 JSON');
-      }
+      const request = parseToolArguments(argumentsText, 'ask_user ');
       if (!request.question || !Array.isArray(request.options) || !request.options.length) {
         throw new Error('AI ask_user 缺少问题或选项');
       }
@@ -598,7 +605,7 @@
         '你是求职助手，请用中文回答用户问题。',
         '需要了解当前配置时使用 read_user_config；当用户明确要求修改求职配置时使用 update_user_config；没有明确要求时不要修改配置。AI 接入配置（接口地址、模型和 API Key）不可读取、不可修改。',
         '用户要求搜索特定关键词岗位时，且当前位于 Boss 职位列表页，使用 search_jobs。搜索成功后，只有用户明确要求开始或继续投递时才使用 start_deliver_jobs。',
-        '调用 update_user_config 时只传实际修改的字段，不要传未修改字段或 null。工具执行失败时会返回包含 ok:false 和 error 的 JSON 工具结果。请根据错误修正一次，仍无法解决时停止并说明原因；不要把失败说成成功，也不要重复执行已经成功且不需要再次执行的操作。',
+        '调用 update_user_config 时只传实际修改的字段，不要传未修改字段或 null。工具执行失败时会返回包含 ok:false 和 error 的 JSON 工具结果。请根据错误修正一次，仍无法解决时停止并说明原因；不要把失败说成成功，也不要重复执行已经成功且不需要再次执行的操作。本轮工具累计失败 5 次时会被强制终止。',
         config.resumePrompt,
       ].filter(Boolean).join('\n\n');
       try {
@@ -606,7 +613,7 @@
           { role: 'system', content: systemContext },
           ...messages.map((item) => ({ role: item.role, content: item.content })),
         ];
-        let consecutiveToolFailures = 0;
+        let toolFailureCount = 0;
         while (true) {
           const controller = new AbortController();
           const timer = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
@@ -671,7 +678,6 @@
               } else {
                 throw new Error('AI 返回了不支持的工具');
               }
-              consecutiveToolFailures = 0;
               addLog(toolName === 'read_user_config'
                 ? 'AI 读取了当前配置'
                 : toolName === 'ask_user'
@@ -686,10 +692,10 @@
               if (error?.code === 'USER_CANCELLED') throw error;
               const message = error instanceof Error ? error.message : String(error);
               result = JSON.stringify({ ok: false, error: message });
-              consecutiveToolFailures += 1;
-              addLog(`工具 ${toolName || '未知工具'} 执行失败，已反馈给 AI：${message}`, 'error');
-              if (consecutiveToolFailures >= MAX_CONSECUTIVE_TOOL_FAILURES) {
-                const limitError = new Error(`工具已连续失败 ${MAX_CONSECUTIVE_TOOL_FAILURES} 次，本轮对话已终止`);
+              toolFailureCount += 1;
+              addLog(`工具 ${toolName || '未知工具'} 执行失败（${toolFailureCount}/${MAX_TOOL_FAILURES_PER_TURN}），已反馈给 AI：${message}`, 'error');
+              if (toolFailureCount >= MAX_TOOL_FAILURES_PER_TURN) {
+                const limitError = new Error(`工具本轮累计失败 ${MAX_TOOL_FAILURES_PER_TURN} 次，本轮对话已终止`);
                 limitError.code = 'TOOL_FAILURE_LIMIT';
                 throw limitError;
               }
