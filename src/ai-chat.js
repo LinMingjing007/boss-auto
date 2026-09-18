@@ -17,47 +17,45 @@
       window.BossAutoLogInstance?.add(message, type);
     }
 
-    const nullableString = { type: ['string', 'null'] };
-    const nullableBoolean = { type: ['boolean', 'null'] };
     const onlineStatusValues = ['在线', '刚刚活跃', '今日活跃', '3日内活跃', '本周活跃', '本月活跃', '半年前活跃'];
+    const MAX_CONSECUTIVE_TOOL_FAILURES = 5;
     const updateConfigTool = {
       type: 'function',
       function: {
         name: 'update_user_config',
-        description: '修改当前配置版本中的求职筛选、AI 判别规则和多轮聊天消息。只在用户明确要求修改时调用。更新消息序列前必须先读取当前配置，并传入完整新序列；已有图片必须保留原 id，不能通过工具新增或替换图片文件。AI 接入配置不在工具范围内。',
-        strict: true,
+        description: '修改当前配置版本。只传需要修改的字段，不要传未修改字段或 null。更新消息序列前必须先读取当前配置，并传入完整新序列；已有图片必须保留原 id，不能通过工具新增或替换图片文件。AI 接入配置不在工具范围内。',
         parameters: {
           type: 'object',
           properties: {
-            keywords: nullableString,
-            locations: nullableString,
-            blockedWords: nullableString,
-            resumePrompt: nullableString,
-            aiPrompt: nullableString,
-            aiEnabled: nullableBoolean,
-            aiFailurePolicy: { type: ['string', 'null'], enum: ['skip', 'keep', null] },
-            onlineStatusMode: { type: ['string', 'null'], enum: ['不限', '状态筛选', null] },
-            unknownOnlineStatusPolicy: { type: ['string', 'null'], enum: ['skip', 'keep', null] },
+            keywords: { type: 'string' },
+            locations: { type: 'string' },
+            blockedWords: { type: 'string' },
+            resumePrompt: { type: 'string' },
+            aiPrompt: { type: 'string' },
+            aiEnabled: { type: 'boolean' },
+            aiFailurePolicy: { type: 'string', enum: ['skip', 'keep'] },
+            onlineStatusMode: { type: 'string', enum: ['不限', '状态筛选'] },
+            unknownOnlineStatusPolicy: { type: 'string', enum: ['skip', 'keep'] },
             selectedOnlineStatuses: {
-              type: ['array', 'null'], items: { type: 'string', enum: onlineStatusValues },
+              type: 'array', items: { type: 'string', enum: onlineStatusValues },
             },
             messageSequence: {
-              type: ['array', 'null'],
-              description: '完整的聊天消息序列；null 表示不修改，空数组表示清空。文字消息的 id 可为 null；图片消息必须使用 read_user_config 返回的原 id，content 为 null。',
+              type: 'array',
+              description: '完整的聊天消息序列；空数组表示清空。文字消息可省略 id 和 name；图片消息必须使用 read_user_config 返回的原 id，且可省略 content。',
               items: {
                 type: 'object',
                 properties: {
-                  id: nullableString,
+                  id: { type: 'string' },
                   type: { type: 'string', enum: ['text', 'image'] },
-                  content: nullableString,
-                  name: nullableString,
+                  content: { type: 'string' },
+                  name: { type: 'string' },
                 },
-                required: ['id', 'type', 'content', 'name'],
+                required: ['type'],
                 additionalProperties: false,
               },
             },
           },
-          required: ['keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt', 'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'unknownOnlineStatusPolicy', 'selectedOnlineStatuses', 'messageSequence'],
+          required: [],
           additionalProperties: false,
         },
       },
@@ -67,7 +65,6 @@
       function: {
         name: 'read_user_config',
         description: '读取当前配置版本，供 AI 了解用户的求职筛选和 AI 设置。不会返回 API Key 原文。',
-        strict: true,
         parameters: {
           type: 'object',
           properties: {},
@@ -81,7 +78,6 @@
       function: {
         name: 'ask_user',
         description: '向用户提出需要用户选择或补充的信息。用户点击选项后会自动继续对话；需要自定义内容时允许选择其他并输入。',
-        strict: true,
         parameters: {
           type: 'object',
           properties: {
@@ -99,7 +95,6 @@
       function: {
         name: 'search_jobs',
         description: '在 Boss 职位列表页使用页面原生搜索框搜索指定关键词的岗位，并等待搜索结果刷新。搜索成功后可继续调用 start_deliver_jobs。',
-        strict: true,
         parameters: {
           type: 'object',
           properties: {
@@ -115,7 +110,6 @@
       function: {
         name: 'start_deliver_jobs',
         description: '在 Boss 职位列表页启动或继续自动浏览和投递岗位。复用页面上的“开始投递/继续投递”按钮，并与本地投递状态保持同步。',
-        strict: true,
         parameters: {
           type: 'object',
           properties: {},
@@ -209,6 +203,9 @@
       } catch {
         throw new Error('AI 配置工具参数不是有效 JSON');
       }
+      if (!changes || typeof changes !== 'object' || Array.isArray(changes)) {
+        throw new Error('AI 配置工具参数必须是 JSON 对象');
+      }
       const current = loadConfig();
       const next = { ...current };
       const editableFields = [
@@ -216,7 +213,12 @@
         'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'unknownOnlineStatusPolicy', 'selectedOnlineStatuses',
         'messageSequence',
       ];
-      const changedFields = editableFields.filter((field) => changes[field] !== null && changes[field] !== undefined);
+      const providedFields = Object.keys(changes);
+      const unknownFields = providedFields.filter((field) => !editableFields.includes(field));
+      if (unknownFields.length) throw new Error(`配置包含不支持的字段：${unknownFields.join('、')}`);
+      const nullFields = providedFields.filter((field) => changes[field] === null);
+      if (nullFields.length) throw new Error(`配置字段不能为 null，请省略未修改字段：${nullFields.join('、')}`);
+      const changedFields = providedFields.filter((field) => changes[field] !== undefined);
       editableFields.forEach((field) => {
         if (changes[field] !== null && changes[field] !== undefined) next[field] = changes[field];
       });
@@ -596,7 +598,7 @@
         '你是求职助手，请用中文回答用户问题。',
         '需要了解当前配置时使用 read_user_config；当用户明确要求修改求职配置时使用 update_user_config；没有明确要求时不要修改配置。AI 接入配置（接口地址、模型和 API Key）不可读取、不可修改。',
         '用户要求搜索特定关键词岗位时，且当前位于 Boss 职位列表页，使用 search_jobs。搜索成功后，只有用户明确要求开始或继续投递时才使用 start_deliver_jobs。',
-        '工具执行失败时会返回包含 ok:false 和 error 的 JSON 工具结果。请根据错误自行决定修正参数后再次调用、询问用户补充信息，或停止尝试并说明原因。不要把失败说成成功，也不要重复执行已经成功且不需要再次执行的操作。',
+        '调用 update_user_config 时只传实际修改的字段，不要传未修改字段或 null。工具执行失败时会返回包含 ok:false 和 error 的 JSON 工具结果。请根据错误修正一次，仍无法解决时停止并说明原因；不要把失败说成成功，也不要重复执行已经成功且不需要再次执行的操作。',
         config.resumePrompt,
       ].filter(Boolean).join('\n\n');
       try {
@@ -604,6 +606,7 @@
           { role: 'system', content: systemContext },
           ...messages.map((item) => ({ role: item.role, content: item.content })),
         ];
+        let consecutiveToolFailures = 0;
         while (true) {
           const controller = new AbortController();
           const timer = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
@@ -618,7 +621,6 @@
               body: JSON.stringify({
                 model: config.aiModel,
                 temperature: 0.2,
-                max_tokens: 1024,
                 thinking: { type: 'disabled' },
                 tools: [readConfigTool, updateConfigTool, askUserTool, searchJobsTool, startDeliverJobsTool],
                 tool_choice: 'auto',
@@ -631,7 +633,11 @@
           }
           if (!response.ok) throw new Error(`AI 接口 HTTP ${response.status}`);
           const data = await response.json();
-          const responseMessage = data?.choices?.[0]?.message;
+          const choice = data?.choices?.[0];
+          const responseMessage = choice?.message;
+          if (choice?.finish_reason === 'length') {
+            throw new Error('AI 输出达到长度上限，工具参数可能被截断；请缩短修改内容后重试');
+          }
           const toolCalls = responseMessage?.tool_calls || [];
           if (!Array.isArray(toolCalls) || toolCalls.some((call) => typeof call?.id !== 'string' || !call.id)) {
             throw new Error('AI 工具调用格式不完整，缺少有效的 tool_call_id');
@@ -665,6 +671,7 @@
               } else {
                 throw new Error('AI 返回了不支持的工具');
               }
+              consecutiveToolFailures = 0;
               addLog(toolName === 'read_user_config'
                 ? 'AI 读取了当前配置'
                 : toolName === 'ask_user'
@@ -679,7 +686,13 @@
               if (error?.code === 'USER_CANCELLED') throw error;
               const message = error instanceof Error ? error.message : String(error);
               result = JSON.stringify({ ok: false, error: message });
+              consecutiveToolFailures += 1;
               addLog(`工具 ${toolName || '未知工具'} 执行失败，已反馈给 AI：${message}`, 'error');
+              if (consecutiveToolFailures >= MAX_CONSECUTIVE_TOOL_FAILURES) {
+                const limitError = new Error(`工具已连续失败 ${MAX_CONSECUTIVE_TOOL_FAILURES} 次，本轮对话已终止`);
+                limitError.code = 'TOOL_FAILURE_LIMIT';
+                throw limitError;
+              }
             }
             conversation.push({ role: 'tool', tool_call_id: toolCall.id, content: result });
           }
@@ -687,11 +700,18 @@
         renderMessages();
         addLog('AI 对话回复成功', 'success');
       } catch (error) {
-        if (messages.at(-1)?.role === 'user' && messages.at(-1).displayContent === displayContent) messages.pop();
-        renderMessages();
+        if (error.code === 'TOOL_FAILURE_LIMIT') {
+          messages.push({ role: 'assistant', content: error.message });
+          renderMessages();
+          setStatus(error.message, 'error');
+          addLog(error.message, 'error');
+        } else {
+          if (messages.at(-1)?.role === 'user' && messages.at(-1).displayContent === displayContent) messages.pop();
+          renderMessages();
+        }
         if (error.code === 'USER_CANCELLED') {
           addLog('AI 对话已取消');
-        } else {
+        } else if (error.code !== 'TOOL_FAILURE_LIMIT') {
           const message = error.name === 'AbortError' ? 'AI 请求超时' : error.message;
           setStatus(`AI 对话失败：${message}`, 'error');
         }
