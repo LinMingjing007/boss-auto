@@ -23,7 +23,7 @@
       type: 'function',
       function: {
         name: 'update_user_config',
-        description: '修改当前配置版本中的求职筛选和 AI 判别规则。只在用户明确要求修改时调用。AI 接入配置不在工具范围内。',
+        description: '修改当前配置版本中的求职筛选、AI 判别规则和多轮聊天消息。只在用户明确要求修改时调用。更新消息序列前必须先读取当前配置，并传入完整新序列；已有图片必须保留原 id，不能通过工具新增或替换图片文件。AI 接入配置不在工具范围内。',
         strict: true,
         parameters: {
           type: 'object',
@@ -40,8 +40,23 @@
             selectedOnlineStatuses: {
               type: ['array', 'null'], items: { type: 'string', enum: onlineStatusValues },
             },
+            messageSequence: {
+              type: ['array', 'null'],
+              description: '完整的聊天消息序列；null 表示不修改，空数组表示清空。文字消息的 id 可为 null；图片消息必须使用 read_user_config 返回的原 id，content 为 null。',
+              items: {
+                type: 'object',
+                properties: {
+                  id: nullableString,
+                  type: { type: 'string', enum: ['text', 'image'] },
+                  content: nullableString,
+                  name: nullableString,
+                },
+                required: ['id', 'type', 'content', 'name'],
+                additionalProperties: false,
+              },
+            },
           },
-          required: ['keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt', 'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'unknownOnlineStatusPolicy', 'selectedOnlineStatuses'],
+          required: ['keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt', 'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'unknownOnlineStatusPolicy', 'selectedOnlineStatuses', 'messageSequence'],
           additionalProperties: false,
         },
       },
@@ -79,6 +94,38 @@
       },
     };
 
+    function normalizeMessageSequenceUpdate(sequence, currentSequence) {
+      if (!Array.isArray(sequence)) throw new Error('消息序列必须是数组');
+      const currentImages = new Map((currentSequence || [])
+        .filter((message) => message?.type === 'image' && message.id)
+        .map((message) => [message.id, message]));
+      const usedIds = new Set();
+      const createdAt = Date.now();
+      return sequence.map((message, index) => {
+        if (!message || !['text', 'image'].includes(message.type)) {
+          throw new Error(`第 ${index + 1} 条消息类型无效`);
+        }
+        const providedId = typeof message.id === 'string' ? message.id.trim() : '';
+        const id = providedId || `msg-${createdAt}-${index}`;
+        if (usedIds.has(id)) throw new Error(`第 ${index + 1} 条消息的 id 重复`);
+        usedIds.add(id);
+
+        if (message.type === 'text') {
+          if (typeof message.content !== 'string' || !message.content.trim()) {
+            throw new Error(`第 ${index + 1} 条文字消息内容不能为空`);
+          }
+          return { id, type: 'text', content: message.content };
+        }
+
+        if (!providedId || !currentImages.has(providedId)) {
+          throw new Error(`第 ${index + 1} 条图片消息不存在；AI 只能保留或排序已有图片，新图片请在设置页上传`);
+        }
+        const existing = currentImages.get(providedId);
+        if (!existing.content) throw new Error(`第 ${index + 1} 条图片消息没有有效图片数据`);
+        return { ...existing, id: providedId, type: 'image' };
+      });
+    }
+
     function updateUserConfig(argumentsText) {
       let changes;
       try {
@@ -91,11 +138,15 @@
       const editableFields = [
         'keywords', 'locations', 'blockedWords', 'resumePrompt', 'aiPrompt',
         'aiEnabled', 'aiFailurePolicy', 'onlineStatusMode', 'unknownOnlineStatusPolicy', 'selectedOnlineStatuses',
+        'messageSequence',
       ];
       const changedFields = editableFields.filter((field) => changes[field] !== null && changes[field] !== undefined);
       editableFields.forEach((field) => {
         if (changes[field] !== null && changes[field] !== undefined) next[field] = changes[field];
       });
+      if (changes.messageSequence !== null && changes.messageSequence !== undefined) {
+        next.messageSequence = normalizeMessageSequenceUpdate(changes.messageSequence, current.messageSequence);
+      }
       if (next.onlineStatusMode === '不限') next.selectedOnlineStatuses = [];
       if (next.onlineStatusMode === '状态筛选' && !Array.isArray(next.selectedOnlineStatuses)) {
         next.selectedOnlineStatuses = [];
@@ -139,8 +190,10 @@
         aiFailurePolicy: config.aiFailurePolicy,
         messageSequence: (config.messageSequence || []).map((message, index) => ({
           index: index + 1,
+          id: message.id || null,
           type: message.type,
-          content: message.type === 'image' ? (message.name || '图片') : message.content,
+          content: message.type === 'image' ? null : message.content,
+          name: message.type === 'image' ? (message.name || '图片') : null,
         })),
       }, null, 2);
     }
